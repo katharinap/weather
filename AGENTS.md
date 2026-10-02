@@ -2,7 +2,8 @@
 
 ## Goal
 Personal-use weather app for Germany using DWD data via Bright Sky (https://api.brightsky.dev).
-Not for release. Android 15 only (minSdk = targetSdk = compileSdk = 35).
+Not for release.  Android 15 only: minSdk = 35, targetSdk = 35, compileSdk = 37 (required by current AndroidX).
+Only use APIs available at API 35; do not use newer platform APIs.
 
 ## Stack
 Kotlin, Jetpack Compose (Material 3), Hilt, Retrofit + kotlinx.serialization,
