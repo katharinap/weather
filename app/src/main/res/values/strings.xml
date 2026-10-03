@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">Weather</string>
+    <string name="wind_direction_n">N</string>
+    <string name="wind_direction_nne">NNE</string>
+    <string name="wind_direction_ne">NE</string>
+    <string name="wind_direction_ene">ENE</string>
+    <string name="wind_direction_e">E</string>
+    <string name="wind_direction_ese">ESE</string>
+    <string name="wind_direction_se">SE</string>
+    <string name="wind_direction_sse">SSE</string>
+    <string name="wind_direction_s">S</string>
+    <string name="wind_direction_ssw">SSW</string>
+    <string name="wind_direction_sw">SW</string>
+    <string name="wind_direction_wsw">WSW</string>
+    <string name="wind_direction_w">W</string>
+    <string name="wind_direction_wnw">WNW</string>
+    <string name="wind_direction_nw">NW</string>
+    <string name="wind_direction_nnw">NNW</string>
 </resources>
