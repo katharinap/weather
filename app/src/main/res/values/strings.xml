@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">Weather</string>
+
+    <!-- Compass directions -->
     <string name="wind_direction_n">N</string>
     <string name="wind_direction_nne">NNE</string>
     <string name="wind_direction_ne">NE</string>
@@ -16,4 +18,49 @@
     <string name="wind_direction_wnw">WNW</string>
     <string name="wind_direction_nw">NW</string>
     <string name="wind_direction_nnw">NNW</string>
+
+    <!-- Weather condition names -->
+    <string name="condition_sunny">Sunny</string>
+    <string name="condition_partly_cloudy">Partly Cloudy</string>
+    <string name="condition_cloudy">Cloudy</string>
+    <string name="condition_rain">Rain</string>
+    <string name="condition_snow">Snow</string>
+    <string name="condition_thunderstorm">Thunderstorm</string>
+    <string name="condition_fog">Fog</string>
+    <string name="condition_windy">Windy</string>
+    <string name="condition_unknown">Unknown</string>
+
+    <!-- Detail card labels -->
+    <string name="label_wind">Wind</string>
+    <string name="label_humidity">Humidity</string>
+    <string name="label_pressure">Pressure</string>
+    <string name="label_rain">Rain</string>
+    <string name="label_rain_last_hour">Rain, last hour</string>
+    <string name="label_cloud_cover">Cloud Cover</string>
+    <string name="label_visibility">Visibility</string>
+    <string name="label_dew_point">Dew Point</string>
+
+    <!-- Formatting and Metadata -->
+    <string name="format_temperature">%d°</string>
+    <string name="format_wind">%1$.1f km/h from %2$s</string>
+    <string name="format_wind_value">%1$d km/h %2$s</string>
+    <string name="format_wind_gusts">, gusts %1$.1f km/h</string>
+    <string name="format_wind_gusts_line">Gusts %1$d km/h</string>
+    <string name="format_humidity">%d%%</string>
+    <string name="format_pressure">%1$.1f hPa</string>
+    <string name="format_precipitation">%1$.1f mm</string>
+    <string name="format_cloud_cover">%d%%</string>
+    <string name="format_visibility">%1$.1f km</string>
+    <string name="format_dew_point">%1$.1f°C</string>
+    <string name="format_observed">Observed %1$s</string>
+    <string name="format_observed_yesterday">Yesterday %1$s</string>
+    <string name="format_station">Station %1$s (%2$.1f km)</string>
+    <string name="attribution_dwd">Data: Deutscher Wetterdienst via Bright Sky</string>
+
+    <!-- Error & Loading States -->
+    <string name="error_network">Network error. Please check your connection.</string>
+    <string name="error_server">Server error. Please try again later.</string>
+    <string name="error_unknown">An unexpected error occurred.</string>
+    <string name="btn_retry">Retry</string>
+    <string name="transient_error_refresh">Failed to refresh weather data.</string>
 </resources>
