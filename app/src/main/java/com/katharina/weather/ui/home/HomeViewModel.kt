@@ -2,18 +2,22 @@ package com.katharina.weather.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.katharina.weather.domain.forecast.toDailyForecasts
+import com.katharina.weather.domain.forecast.upcoming
 import com.katharina.weather.domain.model.DefaultPlace
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.repository.WeatherRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.IOException
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 
 @HiltViewModel
@@ -51,30 +55,50 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = HomeUiState.Loading
             }
 
-            val result = repository.getCurrentWeather(place.latitude, place.longitude)
-            result.fold(
-                onSuccess = { weather ->
-                    lastFetchedTime = Instant.now()
-                    _uiState.value = HomeUiState.Success(
-                        weather = weather,
-                        place = place,
-                        fetchedAt = lastFetchedTime,
-                        isRefreshing = false,
-                        transientError = null
-                    )
-                },
-                onFailure = { throwable ->
-                    if (currentState is HomeUiState.Success) {
-                        _uiState.value = currentState.copy(
-                            isRefreshing = false,
-                            transientError = throwable.localizedMessage ?: "Failed to refresh weather data."
-                        )
-                    } else {
-                        val kind = classifyError(throwable)
-                        _uiState.value = HomeUiState.Error(kind)
-                    }
+            val (currentResult, forecastResult) = coroutineScope {
+                val c = async { repository.getCurrentWeather(place.latitude, place.longitude) }
+                val f = async { repository.getWeather(place.latitude, place.longitude, days = 7) }
+                c.await() to f.await()
+            }
+
+            val now = Instant.now()
+            val previousSuccess = currentState as? HomeUiState.Success
+
+            if (currentResult.isSuccess) {
+                val weather = currentResult.getOrThrow()
+                val forecastState = if (forecastResult.isSuccess) {
+                    val forecastList = forecastResult.getOrThrow()
+                    val hours = forecastList.upcoming(now)
+                    val days = forecastList.toDailyForecasts()
+                    ForecastState.Loaded(hours = hours, days = days)
+                } else {
+                    previousSuccess?.forecast ?: ForecastState.Unavailable
                 }
-            )
+
+                val transientErr = if (forecastResult.isFailure && currentResult.isSuccess && isRefreshing) {
+                    forecastResult.exceptionOrNull()?.localizedMessage ?: "Failed to refresh forecast."
+                } else null
+
+                lastFetchedTime = now
+                _uiState.value = HomeUiState.Success(
+                    weather = weather,
+                    place = place,
+                    fetchedAt = lastFetchedTime,
+                    forecast = forecastState,
+                    isRefreshing = false,
+                    transientError = transientErr
+                )
+            } else {
+                if (previousSuccess != null) {
+                    _uiState.value = previousSuccess.copy(
+                        isRefreshing = false,
+                        transientError = currentResult.exceptionOrNull()?.localizedMessage ?: "Failed to refresh weather data."
+                    )
+                } else {
+                    val kind = classifyError(currentResult.exceptionOrNull() ?: Exception())
+                    _uiState.value = HomeUiState.Error(kind)
+                }
+            }
         }
     }
 

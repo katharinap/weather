@@ -101,7 +101,7 @@ class WeatherRepositoryImplTest {
             val forecasts = result.getOrNull()
             assertNotNull(forecasts)
             assertTrue(forecasts!!.isNotEmpty())
-            assertEquals(16.3, forecasts[0].temperature, 0.001)
+            assertEquals(16.3, forecasts[0].temperature!!, 0.001)
         }
 
     @Test

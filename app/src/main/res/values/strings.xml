@@ -25,6 +25,8 @@
     <string name="condition_cloudy">Cloudy</string>
     <string name="condition_rain">Rain</string>
     <string name="condition_snow">Snow</string>
+    <string name="condition_sleet">Sleet</string>
+    <string name="condition_hail">Hail</string>
     <string name="condition_thunderstorm">Thunderstorm</string>
     <string name="condition_fog">Fog</string>
     <string name="condition_windy">Windy</string>
@@ -56,6 +58,12 @@
     <string name="format_observed_yesterday">Yesterday %1$s</string>
     <string name="format_station">Station %1$s (%2$.1f km)</string>
     <string name="attribution_dwd">Data: Deutscher Wetterdienst via Bright Sky</string>
+
+    <!-- Forecast Strings -->
+    <string name="label_now">Now</string>
+    <string name="label_today">Today</string>
+    <string name="label_tomorrow">Tomorrow</string>
+    <string name="forecast_unavailable">Forecast unavailable</string>
 
     <!-- Error & Loading States -->
     <string name="error_network">Network error. Please check your connection.</string>

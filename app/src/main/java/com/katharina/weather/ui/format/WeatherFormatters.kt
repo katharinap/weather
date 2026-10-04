@@ -12,10 +12,11 @@ import java.util.Locale
 
 @DrawableRes
 fun getWeatherIconRes(icon: String?): Int {
-    return when (icon?.lowercase()) {
+    val normalized = icon?.lowercase()?.replace('_', '-')
+    return when (normalized) {
         "sunny", "clear-day" -> R.drawable.ic_weather_clear_day
         "clear-night" -> R.drawable.ic_weather_clear_night
-        "partly-cloudy-day" -> R.drawable.ic_weather_partly_cloudy_day
+        "partly-cloudy", "partly-cloudy-day" -> R.drawable.ic_weather_partly_cloudy_day
         "partly-cloudy-night" -> R.drawable.ic_weather_partly_cloudy_night
         "cloudy", "overcast" -> R.drawable.ic_weather_cloudy
         "fog", "foggy" -> R.drawable.ic_weather_fog
@@ -32,11 +33,13 @@ fun getWeatherIconRes(icon: String?): Int {
 @StringRes
 fun WeatherCondition.toNameStringRes(): Int {
     return when (this) {
-        WeatherCondition.SUNNY -> R.string.condition_sunny
-        WeatherCondition.PARTLY_CLOUDY -> R.string.condition_partly_cloudy
+        WeatherCondition.SUNNY, WeatherCondition.CLEAR_DAY, WeatherCondition.CLEAR_NIGHT -> R.string.condition_sunny
+        WeatherCondition.PARTLY_CLOUDY, WeatherCondition.PARTLY_CLOUDY_DAY, WeatherCondition.PARTLY_CLOUDY_NIGHT -> R.string.condition_partly_cloudy
         WeatherCondition.CLOUDY -> R.string.condition_cloudy
         WeatherCondition.RAIN -> R.string.condition_rain
         WeatherCondition.SNOW -> R.string.condition_snow
+        WeatherCondition.SLEET -> R.string.condition_sleet
+        WeatherCondition.HAIL -> R.string.condition_hail
         WeatherCondition.THUNDERSTORM -> R.string.condition_thunderstorm
         WeatherCondition.FOG -> R.string.condition_fog
         WeatherCondition.WINDY -> R.string.condition_windy

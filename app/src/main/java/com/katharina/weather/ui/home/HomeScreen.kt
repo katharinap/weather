@@ -1,8 +1,9 @@
 package com.katharina.weather.ui.home
 
-import android.content.res.Configuration
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -17,7 +18,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.katharina.weather.R
 import com.katharina.weather.domain.model.CurrentWeather
+import com.katharina.weather.domain.model.DailyForecast
 import com.katharina.weather.domain.model.DefaultPlace
+import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.model.WeatherCondition
 import com.katharina.weather.ui.format.formatObservationTime
@@ -26,6 +29,11 @@ import com.katharina.weather.ui.format.toNameStringRes
 import com.katharina.weather.ui.theme.WeatherTheme
 import com.katharina.weather.ui.util.toWindDirectionStringRes
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,7 +67,7 @@ fun HomeScreen(
                         onRefresh = onRefresh,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        SuccessContent(weather = state.weather, place = state.place)
+                        SuccessContent(weather = state.weather, place = state.place, forecastState = state.forecast)
                     }
                 }
             }
@@ -87,7 +95,12 @@ fun ErrorContent(kind: ErrorKind, onRetry: () -> Unit, modifier: Modifier = Modi
 }
 
 @Composable
-fun SuccessContent(weather: CurrentWeather, place: Place, modifier: Modifier = Modifier) {
+fun SuccessContent(
+    weather: CurrentWeather,
+    place: Place,
+    forecastState: ForecastState,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -198,6 +211,38 @@ fun SuccessContent(weather: CurrentWeather, place: Place, modifier: Modifier = M
             }
         }
 
+        // Forecast Section (Hourly Strip & Daily List)
+        when (forecastState) {
+            is ForecastState.Loaded -> {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    HourlyStrip(hours = forecastState.hours)
+                    DailyList(days = forecastState.days)
+                }
+            }
+            is ForecastState.Unavailable -> {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.forecast_unavailable),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
         // Footer Metadata
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -221,6 +266,146 @@ fun SuccessContent(weather: CurrentWeather, place: Place, modifier: Modifier = M
                 text = stringResource(R.string.attribution_dwd),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
+            )
+        }
+    }
+}
+
+@Composable
+fun HourlyStrip(hours: List<HourlyForecast>, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(items = hours, key = { _, item -> item.timestamp.toEpochMilli() }) { index, item ->
+                HourlyItem(item = item, isFirst = index == 0)
+            }
+        }
+    }
+}
+
+@Composable
+fun HourlyItem(item: HourlyForecast, isFirst: Boolean) {
+    val timeLabel = if (isFirst) {
+        stringResource(R.string.label_now)
+    } else {
+        DateTimeFormatter.ofPattern("HH:mm")
+            .withZone(ZoneId.of("Europe/Berlin"))
+            .format(item.timestamp)
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.width(64.dp)
+    ) {
+        Text(
+            text = timeLabel,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Image(
+            painter = painterResource(id = getWeatherIconRes(item.icon)),
+            contentDescription = null,
+            modifier = Modifier.size(28.dp)
+        )
+        Text(
+            text = item.temperature?.let { stringResource(R.string.format_temperature, it.toInt()) } ?: "–",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        val prob = item.precipitationProbability
+        if (prob != null && prob >= 10) {
+            Text(
+                text = "$prob%",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+    }
+}
+
+@Composable
+fun DailyList(days: List<DailyForecast>, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            days.forEach { day ->
+                DailyRow(day = day)
+            }
+        }
+    }
+}
+
+@Composable
+fun DailyRow(day: DailyForecast) {
+    val today = LocalDate.now(ZoneId.of("Europe/Berlin"))
+    val dayLabel = when (day.date) {
+        today -> stringResource(R.string.label_today)
+        today.plusDays(1) -> stringResource(R.string.label_tomorrow)
+        else -> day.date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = dayLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(90.dp)
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Image(
+                painter = painterResource(id = getWeatherIconRes(day.condition.toDayVariant().name)),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+            )
+
+            val prob = day.maxPrecipProbabilityPercent
+            if (prob != null && prob >= 10) {
+                Text(
+                    text = if (day.precipitationMm > 0.0) "$prob% (${String.format(Locale.getDefault(), "%.1f", day.precipitationMm)} mm)" else "$prob%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.width(80.dp)
+                )
+            } else {
+                Spacer(modifier = Modifier.width(80.dp))
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = day.minTempC?.let { "${it.toInt()}°" } ?: "–",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = day.maxTempC?.let { "${it.toInt()}°" } ?: "–",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
             )
         }
     }
@@ -276,7 +461,7 @@ fun HomeScreenLoadingPreview() {
 }
 
 @Preview(showBackground = true)
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun HomeScreenSuccessPreview() {
     WeatherTheme {
@@ -298,7 +483,36 @@ fun HomeScreenSuccessPreview() {
                     stationDistance = 3767.0
                 ),
                 place = DefaultPlace,
-                fetchedAt = Instant.now()
+                fetchedAt = Instant.now(),
+                forecast = ForecastState.Loaded(
+                    hours = listOf(
+                        HourlyForecast(
+                            timestamp = Instant.now(),
+                            temperature = 17.0,
+                            condition = WeatherCondition.CLOUDY,
+                            icon = "cloudy",
+                            precipitation = 0.0,
+                            precipitationProbability = 15,
+                            windSpeed = 5.0,
+                            windGustSpeed = 10.0,
+                            windDirection = 40,
+                            cloudCover = 100,
+                            sunshine = 0.0,
+                            relativeHumidity = 75
+                        )
+                    ),
+                    days = listOf(
+                        DailyForecast(
+                            date = LocalDate.now(),
+                            minTempC = 12.0,
+                            maxTempC = 20.0,
+                            precipitationMm = 0.5,
+                            maxPrecipProbabilityPercent = 20,
+                            maxGustKmh = 15.0,
+                            condition = WeatherCondition.PARTLY_CLOUDY_DAY
+                        )
+                    )
+                )
             ),
             onRefresh = {},
             onRetry = {},
@@ -329,7 +543,8 @@ fun HomeScreenSuccessNullsPreview() {
                     stationDistance = null
                 ),
                 place = DefaultPlace,
-                fetchedAt = Instant.now()
+                fetchedAt = Instant.now(),
+                forecast = ForecastState.Unavailable
             ),
             onRefresh = {},
             onRetry = {},

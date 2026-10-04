@@ -54,7 +54,7 @@ class WeatherMapperTest {
 
         assertEquals(entries.size, forecasts.size)
         val first = forecasts[0]
-        assertEquals(16.3, first.temperature, 0.001)
+        assertEquals(16.3, first.temperature!!, 0.001)
         assertEquals(WeatherCondition.CLOUDY, first.condition)
         assertEquals("cloudy", first.icon)
         assertEquals(5.0, first.windSpeed!!, 0.001)

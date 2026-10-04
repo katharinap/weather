@@ -43,7 +43,7 @@ fun HourlyWeatherEntryDto.toHourlyForecast(): HourlyForecast {
     val cond = WeatherCondition.fromIcon(icon)
     return HourlyForecast(
         timestamp = instant,
-        temperature = temperature ?: 0.0,
+        temperature = temperature,
         condition = cond,
         icon = icon ?: "unknown",
         precipitation = precipitation,

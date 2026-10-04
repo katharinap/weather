@@ -4,7 +4,7 @@ import java.time.Instant
 
 data class HourlyForecast(
     val timestamp: Instant,
-    val temperature: Double,
+    val temperature: Double?,
     val condition: WeatherCondition,
     val icon: String,
     val precipitation: Double?,

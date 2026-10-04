@@ -52,6 +52,7 @@ class HomeViewModelTest {
                     stationDistance = 1000.0,
                 )
             repository.currentWeatherResult = Result.success(weather)
+            repository.weatherForecastResult = Result.success(emptyList())
 
             val viewModel = HomeViewModel(repository)
 
@@ -84,6 +85,41 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun testForecastOnlyFailureKeepsCurrentWeather() =
+        runTest {
+            val weather =
+                CurrentWeather(
+                    timestamp = Instant.now(),
+                    temperature = 20.0,
+                    condition = WeatherCondition.SUNNY,
+                    icon = "sunny",
+                    windSpeed = 5.0,
+                    windGustSpeed = 10.0,
+                    windDirection = 90,
+                    cloudCover = 0,
+                    relativeHumidity = 50,
+                    precipitation10 = 0.0,
+                    precipitation60 = 0.0,
+                    stationName = "Munich",
+                    stationDistance = 1000.0,
+                )
+            repository.currentWeatherResult = Result.success(weather)
+            repository.weatherForecastResult = Result.failure(IOException("Forecast error"))
+
+            val viewModel = HomeViewModel(repository)
+
+            viewModel.uiState.test {
+                assertEquals(HomeUiState.Loading, awaitItem())
+
+                viewModel.onStart()
+
+                val success = awaitItem() as HomeUiState.Success
+                assertEquals(weather, success.weather)
+                assertEquals(ForecastState.Unavailable, success.forecast)
+            }
+        }
+
+    @Test
     fun testRefreshFailureKeepsDataAndShowsTransientError() =
         runTest {
             val weather =
@@ -103,6 +139,7 @@ class HomeViewModelTest {
                     stationDistance = 1000.0,
                 )
             repository.currentWeatherResult = Result.success(weather)
+            repository.weatherForecastResult = Result.success(emptyList())
 
             val viewModel = HomeViewModel(repository)
             viewModel.onStart()
@@ -129,6 +166,7 @@ class HomeViewModelTest {
 
 class FakeWeatherRepository : WeatherRepository {
     var currentWeatherResult: Result<CurrentWeather> = Result.failure(IllegalStateException("Not set"))
+    var weatherForecastResult: Result<List<HourlyForecast>> = Result.success(emptyList())
 
     override suspend fun getCurrentWeather(
         lat: Double,
@@ -141,5 +179,5 @@ class FakeWeatherRepository : WeatherRepository {
         lon: Double,
         days: Int,
         tz: String?,
-    ): Result<List<HourlyForecast>> = Result.success(emptyList())
+    ): Result<List<HourlyForecast>> = weatherForecastResult
 }
