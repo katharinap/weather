@@ -13,8 +13,7 @@ interface WeatherRepository {
     suspend fun getWeather(
         lat: Double,
         lon: Double,
-        date: String,
-        lastDate: String,
+        days: Int = 7,
         tz: String? = null
     ): Result<List<HourlyForecast>>
 }

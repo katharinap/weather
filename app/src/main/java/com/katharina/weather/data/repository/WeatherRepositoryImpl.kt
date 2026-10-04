@@ -7,6 +7,9 @@ import com.katharina.weather.domain.model.CurrentWeather
 import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.repository.WeatherRepository
 import kotlinx.coroutines.CancellationException
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 class WeatherRepositoryImpl @Inject constructor(
@@ -31,12 +34,22 @@ class WeatherRepositoryImpl @Inject constructor(
     override suspend fun getWeather(
         lat: Double,
         lon: Double,
-        date: String,
-        lastDate: String,
+        days: Int,
         tz: String?
     ): Result<List<HourlyForecast>> {
         return try {
-            val response = api.weather(lat = lat, lon = lon, date = date, lastDate = lastDate, tz = tz)
+            val zone = tz?.let { ZoneId.of(it) } ?: ZoneId.of("Europe/Berlin")
+            val today = LocalDate.now(zone)
+            val startDate = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val lastDate = today.plusDays(days.toLong()).format(DateTimeFormatter.ISO_LOCAL_DATE)
+
+            val response = api.weather(
+                lat = lat,
+                lon = lon,
+                date = startDate,
+                lastDate = lastDate,
+                tz = tz
+            )
             val entries = response.weather ?: emptyList()
             Result.success(entries.map { it.toHourlyForecast() })
         } catch (e: Exception) {

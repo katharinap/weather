@@ -18,15 +18,15 @@ import retrofit2.Retrofit
 import java.io.File
 
 class WeatherRepositoryImplTest {
-
     private lateinit var mockWebServer: MockWebServer
     private lateinit var api: BrightSkyApi
     private lateinit var repository: WeatherRepositoryImpl
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        coerceInputValues = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+        }
 
     @Before
     fun setUp() {
@@ -34,10 +34,12 @@ class WeatherRepositoryImplTest {
         mockWebServer.start()
 
         val contentType = "application/json".toMediaType()
-        val retrofit = Retrofit.Builder()
-            .baseUrl(mockWebServer.url("/"))
-            .addConverterFactory(json.asConverterFactory(contentType))
-            .build()
+        val retrofit =
+            Retrofit
+                .Builder()
+                .baseUrl(mockWebServer.url("/"))
+                .addConverterFactory(json.asConverterFactory(contentType))
+                .build()
 
         api = retrofit.create(BrightSkyApi::class.java)
         repository = WeatherRepositoryImpl(api)
@@ -49,85 +51,101 @@ class WeatherRepositoryImplTest {
     }
 
     @Test
-    fun testGetCurrentWeatherSuccess() = runBlocking {
-        val jsonContent = File("src/test/resources/current_weather_munich.json").readText()
-        mockWebServer.enqueue(MockResponse().setBody(jsonContent).setResponseCode(200))
+    fun testGetCurrentWeatherSuccess() =
+        runBlocking {
+            val jsonContent = File("src/test/resources/current_weather_munich.json").readText()
+            mockWebServer.enqueue(MockResponse().setBody(jsonContent).setResponseCode(200))
 
-        val result = repository.getCurrentWeather(48.137, 11.575)
-        assertTrue(result.isSuccess)
-        val currentWeather = result.getOrNull()
-        assertNotNull(currentWeather)
-        assertEquals(17.5, currentWeather!!.temperature, 0.001)
-    }
-
-    @Test
-    fun testGetCurrentWeatherHttpError() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(500))
-
-        val result = repository.getCurrentWeather(48.137, 11.575)
-        assertTrue(result.isFailure)
-    }
+            val result = repository.getCurrentWeather(48.137, 11.575)
+            assertTrue(result.isSuccess)
+            val currentWeather = result.getOrNull()
+            assertNotNull(currentWeather)
+            assertEquals(17.5, currentWeather!!.temperature, 0.001)
+        }
 
     @Test
-    fun testGetCurrentWeatherMalformedJson() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("{ malformed json").setResponseCode(200))
+    fun testGetCurrentWeatherHttpError() =
+        runBlocking {
+            mockWebServer.enqueue(MockResponse().setResponseCode(500))
 
-        val result = repository.getCurrentWeather(48.137, 11.575)
-        assertTrue(result.isFailure)
-    }
-
-    @Test
-    fun testGetCurrentWeatherMissingWeatherField() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("{}").setResponseCode(200))
-
-        val result = repository.getCurrentWeather(48.137, 11.575)
-        assertTrue(result.isFailure)
-    }
+            val result = repository.getCurrentWeather(48.137, 11.575)
+            assertTrue(result.isFailure)
+        }
 
     @Test
-    fun testGetWeatherSuccess() = runBlocking {
-        val jsonContent = File("src/test/resources/weather_munich.json").readText()
-        mockWebServer.enqueue(MockResponse().setBody(jsonContent).setResponseCode(200))
+    fun testGetCurrentWeatherMalformedJson() =
+        runBlocking {
+            mockWebServer.enqueue(MockResponse().setBody("{ malformed json").setResponseCode(200))
 
-        val result = repository.getWeather(48.137, 11.575, "2026-10-02", "2026-10-04")
-        assertTrue(result.isSuccess)
-        val forecasts = result.getOrNull()
-        assertNotNull(forecasts)
-        assertTrue(forecasts!!.isNotEmpty())
-        assertEquals(16.3, forecasts[0].temperature, 0.001)
-    }
+            val result = repository.getCurrentWeather(48.137, 11.575)
+            assertTrue(result.isFailure)
+        }
 
     @Test
-    fun testGetWeatherHttpError() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setResponseCode(404))
+    fun testGetCurrentWeatherMissingWeatherField() =
+        runBlocking {
+            mockWebServer.enqueue(MockResponse().setBody("{}").setResponseCode(200))
 
-        val result = repository.getWeather(48.137, 11.575, "2026-10-02", "2026-10-04")
-        assertTrue(result.isFailure)
-    }
+            val result = repository.getCurrentWeather(48.137, 11.575)
+            assertTrue(result.isFailure)
+        }
 
     @Test
-    fun testGetWeatherNullEntries() = runBlocking {
-        mockWebServer.enqueue(MockResponse().setBody("{}").setResponseCode(200))
+    fun testGetWeatherSuccess() =
+        runBlocking {
+            val jsonContent = File("src/test/resources/weather_munich.json").readText()
+            mockWebServer.enqueue(MockResponse().setBody(jsonContent).setResponseCode(200))
 
-        val result = repository.getWeather(48.137, 11.575, "2026-10-02", "2026-10-04")
-        assertTrue(result.isSuccess)
-        val forecasts = result.getOrNull()
-        assertNotNull(forecasts)
-        assertTrue(forecasts!!.isEmpty())
-    }
+            val result = repository.getWeather(48.137, 11.575, days = 2)
+            assertTrue(result.isSuccess)
+            val forecasts = result.getOrNull()
+            assertNotNull(forecasts)
+            assertTrue(forecasts!!.isNotEmpty())
+            assertEquals(16.3, forecasts[0].temperature, 0.001)
+        }
+
+    @Test
+    fun testGetWeatherHttpError() =
+        runBlocking {
+            mockWebServer.enqueue(MockResponse().setResponseCode(404))
+
+            val result = repository.getWeather(48.137, 11.575, days = 2)
+            assertTrue(result.isFailure)
+        }
+
+    @Test
+    fun testGetWeatherNullEntries() =
+        runBlocking {
+            mockWebServer.enqueue(MockResponse().setBody("{}").setResponseCode(200))
+
+            val result = repository.getWeather(48.137, 11.575, days = 2)
+            assertTrue(result.isSuccess)
+            val forecasts = result.getOrNull()
+            assertNotNull(forecasts)
+            assertTrue(forecasts!!.isEmpty())
+        }
 
     @Test(expected = CancellationException::class)
-    fun testCancellationExceptionRethrown() = runBlocking {
-        val failingApi = object : BrightSkyApi {
-            override suspend fun currentWeather(lat: Double, lon: Double, tz: String?): CurrentWeatherResponseDto {
-                throw CancellationException("Cancelled")
-            }
-            override suspend fun weather(lat: Double, lon: Double, date: String, lastDate: String, tz: String?): WeatherResponseDto {
-                throw CancellationException("Cancelled")
-            }
+    fun testCancellationExceptionRethrown() =
+        runBlocking {
+            val failingApi =
+                object : BrightSkyApi {
+                    override suspend fun currentWeather(
+                        lat: Double,
+                        lon: Double,
+                        tz: String?,
+                    ): CurrentWeatherResponseDto = throw CancellationException("Cancelled")
+
+                    override suspend fun weather(
+                        lat: Double,
+                        lon: Double,
+                        date: String,
+                        lastDate: String,
+                        tz: String?,
+                    ): WeatherResponseDto = throw CancellationException("Cancelled")
+                }
+            val repo = WeatherRepositoryImpl(failingApi)
+            repo.getCurrentWeather(0.0, 0.0)
+            Unit
         }
-        val repo = WeatherRepositoryImpl(failingApi)
-        repo.getCurrentWeather(0.0, 0.0)
-        Unit
-    }
 }
