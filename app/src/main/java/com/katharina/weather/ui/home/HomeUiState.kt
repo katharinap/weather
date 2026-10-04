@@ -23,7 +23,8 @@ sealed interface HomeUiState {
 
 sealed interface ForecastState {
     data class Loaded(
-        val hours: List<HourlyForecast>,
+        val hours24: List<HourlyForecast>,
+        val hours48: List<HourlyForecast>,
         val days: List<DailyForecast>
     ) : ForecastState
 

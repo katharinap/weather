@@ -68,9 +68,10 @@ class HomeViewModel @Inject constructor(
                 val weather = currentResult.getOrThrow()
                 val forecastState = if (forecastResult.isSuccess) {
                     val forecastList = forecastResult.getOrThrow()
-                    val hours = forecastList.upcoming(now)
+                    val hours24 = forecastList.upcoming(now, 24)
+                    val hours48 = forecastList.upcoming(now, 48)
                     val days = forecastList.toDailyForecasts()
-                    ForecastState.Loaded(hours = hours, days = days)
+                    ForecastState.Loaded(hours24 = hours24, hours48 = hours48, days = days)
                 } else {
                     previousSuccess?.forecast ?: ForecastState.Unavailable
                 }

@@ -64,6 +64,10 @@
     <string name="label_today">Today</string>
     <string name="label_tomorrow">Tomorrow</string>
     <string name="forecast_unavailable">Forecast unavailable</string>
+    <string name="chart_title">48-Hour Forecast</string>
+    <string name="chart_no_rain">no rain expected</string>
+    <string name="chart_rain_expected">%1$.1f mm rain expected</string>
+    <string name="chart_precipitation_legend">Precipitation (mm)</string>
 
     <!-- Error & Loading States -->
     <string name="error_network">Network error. Please check your connection.</string>

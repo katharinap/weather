@@ -168,6 +168,21 @@ class DailyForecastsTest {
         assertEquals(expectedStart, upcoming[0].timestamp)
     }
 
+    @Test
+    fun `upcoming returns 48 hours for 49 plus input records`() {
+        val zone = ZoneId.of("Europe/Berlin")
+        val date = LocalDate.of(2026, 10, 10)
+        val hours = (0..60).map { h ->
+            createHourly(instant = date.atTime(0, 0).plusHours(h.toLong()).atZone(zone).toInstant())
+        }
+        val now = date.atTime(10, 30).atZone(zone).toInstant()
+        val upcoming48 = hours.upcoming(now, hours = 48)
+
+        assertEquals(48, upcoming48.size)
+        val expectedStart = date.atTime(10, 0).atZone(zone).toInstant()
+        assertEquals(expectedStart, upcoming48[0].timestamp)
+    }
+
     private fun createHourly(
         instant: Instant,
         condition: WeatherCondition = WeatherCondition.CLOUDY,

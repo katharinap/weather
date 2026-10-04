@@ -26,6 +26,7 @@ import com.katharina.weather.domain.model.WeatherCondition
 import com.katharina.weather.ui.format.formatObservationTime
 import com.katharina.weather.ui.format.getWeatherIconRes
 import com.katharina.weather.ui.format.toNameStringRes
+import com.katharina.weather.ui.home.chart.HourlyChart
 import com.katharina.weather.ui.theme.WeatherTheme
 import com.katharina.weather.ui.util.toWindDirectionStringRes
 import java.time.Instant
@@ -211,15 +212,16 @@ fun SuccessContent(
             }
         }
 
-        // Forecast Section (Hourly Strip & Daily List)
+        // Forecast Section (Hourly Strip, Daily List, Hourly Chart)
         when (forecastState) {
             is ForecastState.Loaded -> {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    HourlyStrip(hours = forecastState.hours)
+                    HourlyStrip(hours = forecastState.hours24)
                     DailyList(days = forecastState.days)
+                    HourlyChart(hours = forecastState.hours48)
                 }
             }
             is ForecastState.Unavailable -> {
@@ -370,38 +372,46 @@ fun DailyRow(day: DailyForecast) {
             text = dayLabel,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.width(90.dp)
+            modifier = Modifier.width(80.dp)
         )
 
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.width(32.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Image(
                 painter = painterResource(id = getWeatherIconRes(day.condition.toDayVariant().name)),
                 contentDescription = null,
                 modifier = Modifier.size(24.dp)
             )
+        }
 
+        Box(
+            modifier = Modifier.width(90.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
             val prob = day.maxPrecipProbabilityPercent
             if (prob != null && prob >= 10) {
                 Text(
                     text = if (day.precipitationMm > 0.0) "$prob% (${String.format(Locale.getDefault(), "%.1f", day.precipitationMm)} mm)" else "$prob%",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.width(80.dp)
+                    color = MaterialTheme.colorScheme.primary
                 )
-            } else {
-                Spacer(modifier = Modifier.width(80.dp))
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.width(70.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 text = day.minTempC?.let { "${it.toInt()}°" } ?: "–",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = day.maxTempC?.let { "${it.toInt()}°" } ?: "–",
                 style = MaterialTheme.typography.bodyMedium,
@@ -485,7 +495,23 @@ fun HomeScreenSuccessPreview() {
                 place = DefaultPlace,
                 fetchedAt = Instant.now(),
                 forecast = ForecastState.Loaded(
-                    hours = listOf(
+                    hours24 = listOf(
+                        HourlyForecast(
+                            timestamp = Instant.now(),
+                            temperature = 17.0,
+                            condition = WeatherCondition.CLOUDY,
+                            icon = "cloudy",
+                            precipitation = 0.0,
+                            precipitationProbability = 15,
+                            windSpeed = 5.0,
+                            windGustSpeed = 10.0,
+                            windDirection = 40,
+                            cloudCover = 100,
+                            sunshine = 0.0,
+                            relativeHumidity = 75
+                        )
+                    ),
+                    hours48 = listOf(
                         HourlyForecast(
                             timestamp = Instant.now(),
                             temperature = 17.0,
