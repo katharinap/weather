@@ -10,6 +10,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun HomeRoute(
+    onNavigateToPlaces: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -31,7 +32,9 @@ fun HomeRoute(
     HomeScreen(
         state = state,
         onRefresh = { viewModel.refresh() },
-        onRetry = { viewModel.loadWeather(isRefreshing = false) },
+        onRetry = { viewModel.refresh() },
+        onNavigateToPlaces = onNavigateToPlaces,
+        onUseCurrentLocation = { viewModel.selectCurrentLocation() },
         snackbarHostState = snackbarHostState
     )
 }

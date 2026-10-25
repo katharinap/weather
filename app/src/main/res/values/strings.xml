@@ -69,6 +69,20 @@
     <string name="chart_rain_expected">%1$.1f mm rain expected</string>
     <string name="chart_precipitation_legend">Precipitation (mm)</string>
 
+    <!-- Places & Locations -->
+    <string name="title_places">Places</string>
+    <string name="title_saved_places">Saved Places</string>
+    <string name="search_hint">Search city or place name…</string>
+    <string name="no_place_title">Choose a location</string>
+    <string name="no_place_subtitle">Search for a city or use your current location to see the weather forecast.</string>
+    <string name="btn_search_places">Search Places</string>
+    <string name="btn_use_current_location">Use my current location</string>
+    <string name="places_empty_search">No places found.</string>
+    <string name="places_error_search">Search needs an internet connection.</string>
+    <string name="places_deleted_snackbar">Place deleted</string>
+    <string name="btn_undo">Undo</string>
+    <string name="attribution_open_meteo">Place search: Open-Meteo (GeoNames data)</string>
+
     <!-- Error & Loading States -->
     <string name="error_network">Network error. Please check your connection.</string>
     <string name="error_server">Server error. Please try again later.</string>

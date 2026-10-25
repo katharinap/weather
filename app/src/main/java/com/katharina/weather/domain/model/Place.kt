@@ -1,9 +1,13 @@
 package com.katharina.weather.domain.model
 
-data class Place(
-    val name: String,
-    val latitude: Double,
-    val longitude: Double
-)
+const val CURRENT_LOCATION_ID = -1L
 
-val DefaultPlace = Place("Munich", 48.137, 11.575)
+data class Place(
+    val id: Long,
+    val name: String,
+    val region: String?,
+    val country: String?,
+    val latitude: Double,
+    val longitude: Double,
+    val isCurrentLocation: Boolean = false,
+)

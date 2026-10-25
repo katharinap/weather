@@ -7,6 +7,8 @@ import com.katharina.weather.domain.model.Place
 import java.time.Instant
 
 sealed interface HomeUiState {
+    data object NoPlace : HomeUiState
+
     data object Loading : HomeUiState
 
     data class Success(
@@ -18,7 +20,10 @@ sealed interface HomeUiState {
         val transientError: String? = null
     ) : HomeUiState
 
-    data class Error(val kind: ErrorKind) : HomeUiState
+    data class Error(
+        val place: Place?,
+        val kind: ErrorKind
+    ) : HomeUiState
 }
 
 sealed interface ForecastState {

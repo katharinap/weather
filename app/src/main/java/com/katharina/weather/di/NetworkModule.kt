@@ -2,7 +2,12 @@ package com.katharina.weather.di
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.katharina.weather.data.remote.BrightSkyApi
+import com.katharina.weather.data.remote.GeocodingApi
+import com.katharina.weather.data.repository.GeocodingRepositoryImpl
+import com.katharina.weather.data.repository.PlaceRepositoryImpl
 import com.katharina.weather.data.repository.WeatherRepositoryImpl
+import com.katharina.weather.domain.repository.GeocodingRepository
+import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
 import dagger.Binds
 import dagger.Module
@@ -14,7 +19,16 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class BrightSkyRetrofit
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class GeocodingRetrofit
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -46,7 +60,8 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
+    @BrightSkyRetrofit
+    fun provideBrightSkyRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         val contentType = "application/json".toMediaType()
         return Retrofit.Builder()
             .baseUrl("https://api.brightsky.dev/")
@@ -57,8 +72,26 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideBrightSkyApi(retrofit: Retrofit): BrightSkyApi {
+    @GeocodingRetrofit
+    fun provideGeocodingRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
+        val contentType = "application/json".toMediaType()
+        return Retrofit.Builder()
+            .baseUrl("https://geocoding-api.open-meteo.com/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBrightSkyApi(@BrightSkyRetrofit retrofit: Retrofit): BrightSkyApi {
         return retrofit.create(BrightSkyApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGeocodingApi(@GeocodingRetrofit retrofit: Retrofit): GeocodingApi {
+        return retrofit.create(GeocodingApi::class.java)
     }
 }
 
@@ -71,4 +104,16 @@ abstract class RepositoryModule {
     abstract fun bindWeatherRepository(
         impl: WeatherRepositoryImpl
     ): WeatherRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPlaceRepository(
+        impl: PlaceRepositoryImpl
+    ): PlaceRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGeocodingRepository(
+        impl: GeocodingRepositoryImpl
+    ): GeocodingRepository
 }

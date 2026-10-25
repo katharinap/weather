@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-10-03T17:38:46.921910172Z">
+        <DropdownSelection timestamp="2026-10-25T10:48:37.373078649Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="Wireless" identifier="serviceName=adb-050ea22f-k7RgsD" />
+              <DeviceId pluginId="LocalEmulator" identifier="path=/home/katharina/.config/.android/avd/Pixel_8.avd" />
             </handle>
           </Target>
         </DropdownSelection>

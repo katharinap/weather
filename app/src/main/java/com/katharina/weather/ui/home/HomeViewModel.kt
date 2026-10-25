@@ -4,16 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.katharina.weather.domain.forecast.toDailyForecasts
 import com.katharina.weather.domain.forecast.upcoming
-import com.katharina.weather.domain.model.DefaultPlace
 import com.katharina.weather.domain.model.Place
+import com.katharina.weather.domain.model.PlaceSelection
+import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.time.Duration
@@ -22,32 +21,79 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val repository: WeatherRepository
+    private val placeRepository: PlaceRepository,
+    private val weatherRepository: WeatherRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    private val place: Place = DefaultPlace
+    private var currentPlace: Place? = null
     private var lastFetchedTime: Instant? = null
+    private var loadJob: Job? = null
+
+    init {
+        observeSelection()
+    }
+
+    private fun observeSelection() {
+        combine(
+            placeRepository.selection,
+            placeRepository.savedPlaces
+        ) { selection, savedPlaces ->
+            selection to savedPlaces
+        }.onEach { (selection, savedPlaces) ->
+            when (selection) {
+                is PlaceSelection.None -> {
+                    loadJob?.cancel()
+                    currentPlace = null
+                    _uiState.value = HomeUiState.NoPlace
+                }
+                is PlaceSelection.CurrentLocation -> {
+                    // Handled in Phase 4b
+                }
+                is PlaceSelection.Saved -> {
+                    val targetPlace = savedPlaces.find { it.id == selection.id }
+                    if (targetPlace == null) {
+                        loadJob?.cancel()
+                        currentPlace = null
+                        _uiState.value = HomeUiState.NoPlace
+                    } else if (targetPlace.id != currentPlace?.id) {
+                        currentPlace = targetPlace
+                        loadJob?.cancel()
+                        loadWeatherForPlace(targetPlace, isRefreshing = false)
+                    }
+                }
+            }
+        }.launchIn(viewModelScope)
+    }
 
     fun onStart() {
+        val place = currentPlace ?: return
         val currentState = _uiState.value
         if (currentState is HomeUiState.Success) {
             if (lastFetchedTime != null && Duration.between(lastFetchedTime, Instant.now()).toMinutes() >= 15) {
                 refresh()
             }
         } else if (currentState is HomeUiState.Loading) {
-            loadWeather(isRefreshing = false)
+            loadWeatherForPlace(place, isRefreshing = false)
         }
     }
 
     fun refresh() {
-        loadWeather(isRefreshing = true)
+        val place = currentPlace ?: return
+        loadWeatherForPlace(place, isRefreshing = true)
     }
 
-    fun loadWeather(isRefreshing: Boolean) {
+    fun selectCurrentLocation() {
         viewModelScope.launch {
+            placeRepository.select(PlaceSelection.CurrentLocation)
+        }
+    }
+
+    private fun loadWeatherForPlace(targetPlace: Place, isRefreshing: Boolean) {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val currentState = _uiState.value
             if (isRefreshing && currentState is HomeUiState.Success) {
                 _uiState.update { currentState.copy(isRefreshing = true, transientError = null) }
@@ -56,10 +102,12 @@ class HomeViewModel @Inject constructor(
             }
 
             val (currentResult, forecastResult) = coroutineScope {
-                val c = async { repository.getCurrentWeather(place.latitude, place.longitude) }
-                val f = async { repository.getWeather(place.latitude, place.longitude, days = 7) }
+                val c = async { weatherRepository.getCurrentWeather(targetPlace.latitude, targetPlace.longitude) }
+                val f = async { weatherRepository.getWeather(targetPlace.latitude, targetPlace.longitude, days = 7) }
                 c.await() to f.await()
             }
+
+            if (currentPlace?.id != targetPlace.id) return@launch
 
             val now = Instant.now()
             val previousSuccess = currentState as? HomeUiState.Success
@@ -83,7 +131,7 @@ class HomeViewModel @Inject constructor(
                 lastFetchedTime = now
                 _uiState.value = HomeUiState.Success(
                     weather = weather,
-                    place = place,
+                    place = targetPlace,
                     fetchedAt = lastFetchedTime,
                     forecast = forecastState,
                     isRefreshing = false,
@@ -97,7 +145,7 @@ class HomeViewModel @Inject constructor(
                     )
                 } else {
                     val kind = classifyError(currentResult.exceptionOrNull() ?: Exception())
-                    _uiState.value = HomeUiState.Error(kind)
+                    _uiState.value = HomeUiState.Error(place = targetPlace, kind = kind)
                 }
             }
         }
