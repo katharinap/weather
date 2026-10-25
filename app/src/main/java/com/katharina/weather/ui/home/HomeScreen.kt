@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.katharina.weather.R
@@ -409,13 +410,17 @@ fun DailyRow(day: DailyForecast) {
             Text(
                 text = day.minTempC?.let { "${it.toInt()}°" } ?: "–",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(30.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = day.maxTempC?.let { "${it.toInt()}°" } ?: "–",
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(30.dp)
             )
         }
     }
