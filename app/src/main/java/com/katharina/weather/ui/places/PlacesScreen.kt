@@ -17,6 +17,7 @@ import com.katharina.weather.R
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.model.PlaceSearchResult
 import com.katharina.weather.domain.model.PlaceSelection
+import com.katharina.weather.ui.format.formatPlaceSubtitle
 import com.katharina.weather.ui.theme.WeatherTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,6 +34,7 @@ fun PlacesScreen(
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text(text = stringResource(R.string.title_places)) },
@@ -43,7 +45,10 @@ fun PlacesScreen(
                             contentDescription = "Back"
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -172,7 +177,7 @@ fun SearchResultItem(result: PlaceSearchResult, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold
             )
-            val subtitle = listOfNotNull(result.region, result.country).joinToString(", ")
+            val subtitle = formatPlaceSubtitle(result.region)
             if (subtitle.isNotEmpty()) {
                 Text(
                     text = subtitle,
@@ -288,7 +293,7 @@ fun SavedPlaceItem(
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold
                 )
-                val subtitle = listOfNotNull(place.region, place.country).joinToString(", ")
+                val subtitle = formatPlaceSubtitle(place.region)
                 if (subtitle.isNotEmpty()) {
                     Text(
                         text = subtitle,
