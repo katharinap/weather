@@ -1,14 +1,22 @@
 package com.katharina.weather.ui.home
 
 import app.cash.turbine.test
+import com.katharina.weather.data.location.GeocoderHelper
+import com.katharina.weather.domain.model.CURRENT_LOCATION_ID
+import com.katharina.weather.domain.model.Coordinates
 import com.katharina.weather.domain.model.CurrentWeather
 import com.katharina.weather.domain.model.HourlyForecast
+import com.katharina.weather.domain.model.LocationPermissionException
+import com.katharina.weather.domain.model.LocationUnavailableException
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.model.PlaceSearchResult
 import com.katharina.weather.domain.model.PlaceSelection
 import com.katharina.weather.domain.model.WeatherCondition
+import com.katharina.weather.domain.repository.LocationProvider
 import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +35,10 @@ class HomeViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val weatherRepository = FakeWeatherRepositoryForHome()
     private val placeRepository = FakePlaceRepositoryForHome()
+    private val fakeLocationProvider = FakeLocationProvider()
+    private val geocoderHelper: GeocoderHelper = mockk {
+        coEvery { getPlaceName(any()) } returns "Current location"
+    }
 
     @Before
     fun setUp() {
@@ -40,7 +52,7 @@ class HomeViewModelTest {
 
     @Test
     fun testInitialNoPlace() = runTest {
-        val viewModel = HomeViewModel(placeRepository, weatherRepository)
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
 
         viewModel.uiState.test {
             val item = awaitItem()
@@ -70,7 +82,7 @@ class HomeViewModelTest {
         weatherRepository.currentWeatherResult = Result.success(weather)
         weatherRepository.weatherForecastResult = Result.success(emptyList())
 
-        val viewModel = HomeViewModel(placeRepository, weatherRepository)
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
 
         viewModel.uiState.test {
             awaitItem() // Loading or NoPlace
@@ -86,13 +98,86 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun testCurrentLocationSuccessLoadsWeather() = runTest {
+        val coords = Coordinates(48.137, 11.575)
+        fakeLocationProvider.result = Result.success(coords)
+
+        val weather = CurrentWeather(
+            timestamp = Instant.now(),
+            temperature = 18.0,
+            condition = WeatherCondition.SUNNY,
+            icon = "sunny",
+            windSpeed = 5.0,
+            windGustSpeed = 10.0,
+            windDirection = 90,
+            cloudCover = 0,
+            relativeHumidity = 50,
+            precipitation10 = 0.0,
+            precipitation60 = 0.0,
+            stationName = "Munich",
+            stationDistance = 1000.0
+        )
+        weatherRepository.currentWeatherResult = Result.success(weather)
+
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            placeRepository.selectionFlow.value = PlaceSelection.CurrentLocation
+
+            val item1 = awaitItem()
+            val item2 = if (item1 is HomeUiState.Loading) awaitItem() else item1
+            val success = if (item2 is HomeUiState.Loading) awaitItem() as HomeUiState.Success else item2 as HomeUiState.Success
+
+            assertEquals(CURRENT_LOCATION_ID, success.place.id)
+            assertEquals("Current location", success.place.name)
+            assertTrue(success.place.isCurrentLocation)
+        }
+    }
+
+    @Test
+    fun testCurrentLocationPermissionError() = runTest {
+        fakeLocationProvider.result = Result.failure(LocationPermissionException())
+
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            placeRepository.selectionFlow.value = PlaceSelection.CurrentLocation
+
+            val item = awaitItem()
+            val error = if (item is HomeUiState.Loading) awaitItem() as HomeUiState.Error else item as HomeUiState.Error
+            assertEquals(ErrorKind.LocationPermissionRequired, error.kind)
+        }
+    }
+
+    @Test
+    fun testCurrentLocationUnavailableError() = runTest {
+        fakeLocationProvider.result = Result.failure(LocationUnavailableException())
+
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
+
+        viewModel.uiState.test {
+            awaitItem()
+
+            placeRepository.selectionFlow.value = PlaceSelection.CurrentLocation
+
+            val item = awaitItem()
+            val error = if (item is HomeUiState.Loading) awaitItem() as HomeUiState.Error else item as HomeUiState.Error
+            assertEquals(ErrorKind.LocationUnavailable, error.kind)
+        }
+    }
+
+    @Test
     fun testLoadWeatherNetworkError() = runTest {
         val place = Place(1L, "Munich", "Bavaria", "Germany", 48.137, 11.575)
         placeRepository.placesFlow.value = listOf(place)
         placeRepository.selectionFlow.value = PlaceSelection.Saved(1L)
         weatherRepository.currentWeatherResult = Result.failure(IOException("Network error"))
 
-        val viewModel = HomeViewModel(placeRepository, weatherRepository)
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
 
         viewModel.uiState.test {
             awaitItem() // Loading
@@ -125,7 +210,7 @@ class HomeViewModelTest {
         weatherRepository.currentWeatherResult = Result.success(weather)
         weatherRepository.weatherForecastResult = Result.failure(IOException("Forecast error"))
 
-        val viewModel = HomeViewModel(placeRepository, weatherRepository)
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
 
         viewModel.uiState.test {
             awaitItem() // Loading
@@ -177,7 +262,7 @@ class HomeViewModelTest {
         placeRepository.placesFlow.value = listOf(place1, place2)
         placeRepository.selectionFlow.value = PlaceSelection.Saved(1L)
 
-        val viewModel = HomeViewModel(placeRepository, weatherRepository)
+        val viewModel = HomeViewModel(placeRepository, weatherRepository, fakeLocationProvider, geocoderHelper)
 
         viewModel.uiState.test {
             val firstItem = awaitItem()
@@ -230,5 +315,13 @@ class FakeWeatherRepositoryForHome : WeatherRepository {
 
     override suspend fun getWeather(lat: Double, lon: Double, days: Int, tz: String?): Result<List<HourlyForecast>> {
         return weatherForecastResult
+    }
+}
+
+class FakeLocationProvider : LocationProvider {
+    var result: Result<Coordinates> = Result.failure(LocationUnavailableException())
+
+    override suspend fun currentLocation(): Result<Coordinates> {
+        return result
     }
 }

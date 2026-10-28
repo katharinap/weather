@@ -83,6 +83,12 @@
     <string name="btn_undo">Undo</string>
     <string name="attribution_open_meteo">Place search: Open-Meteo (GeoNames data)</string>
 
+    <!-- Location Errors -->
+    <string name="error_location_permission">Location permission is required to fetch weather for your current location.</string>
+    <string name="error_location_unavailable">Location services are unavailable or timed out. Please check your system location settings.</string>
+    <string name="btn_open_settings">Open Settings</string>
+    <string name="label_current_location">Current location</string>
+
     <!-- Error & Loading States -->
     <string name="error_network">Network error. Please check your connection.</string>
     <string name="error_server">Server error. Please try again later.</string>

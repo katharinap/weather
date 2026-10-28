@@ -2,10 +2,15 @@ package com.katharina.weather.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.katharina.weather.data.location.GeocoderHelper
 import com.katharina.weather.domain.forecast.toDailyForecasts
 import com.katharina.weather.domain.forecast.upcoming
+import com.katharina.weather.domain.model.CURRENT_LOCATION_ID
+import com.katharina.weather.domain.model.LocationPermissionException
+import com.katharina.weather.domain.model.LocationUnavailableException
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.model.PlaceSelection
+import com.katharina.weather.domain.repository.LocationProvider
 import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,7 +27,9 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val placeRepository: PlaceRepository,
-    private val weatherRepository: WeatherRepository
+    private val weatherRepository: WeatherRepository,
+    private val locationProvider: LocationProvider,
+    private val geocoderHelper: GeocoderHelper
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -50,7 +57,7 @@ class HomeViewModel @Inject constructor(
                     _uiState.value = HomeUiState.NoPlace
                 }
                 is PlaceSelection.CurrentLocation -> {
-                    // Handled in Phase 4b
+                    loadCurrentLocationWeather()
                 }
                 is PlaceSelection.Saved -> {
                     val targetPlace = savedPlaces.find { it.id == selection.id }
@@ -81,8 +88,13 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        val place = currentPlace ?: return
-        loadWeatherForPlace(place, isRefreshing = true)
+        val currentState = _uiState.value
+        if (currentState is HomeUiState.Success && currentState.place.isCurrentLocation) {
+            loadCurrentLocationWeather()
+        } else {
+            val place = currentPlace ?: return
+            loadWeatherForPlace(place, isRefreshing = true)
+        }
     }
 
     fun selectCurrentLocation() {
@@ -91,9 +103,40 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun loadWeatherForPlace(targetPlace: Place, isRefreshing: Boolean) {
+    private fun loadCurrentLocationWeather() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
+            _uiState.value = HomeUiState.Loading
+            val coordsResult = locationProvider.currentLocation()
+            coordsResult.fold(
+                onSuccess = { coords ->
+                    val placeName = geocoderHelper.getPlaceName(coords)
+                    val currentLocationPlace = Place(
+                        id = CURRENT_LOCATION_ID,
+                        name = placeName,
+                        region = null,
+                        country = null,
+                        latitude = coords.latitude,
+                        longitude = coords.longitude,
+                        isCurrentLocation = true
+                    )
+                    currentPlace = currentLocationPlace
+                    loadWeatherForPlace(currentLocationPlace, isRefreshing = false)
+                },
+                onFailure = { throwable ->
+                    val kind = when (throwable) {
+                        is LocationPermissionException -> ErrorKind.LocationPermissionRequired
+                        is LocationUnavailableException -> ErrorKind.LocationUnavailable
+                        else -> ErrorKind.LocationUnavailable
+                    }
+                    _uiState.value = HomeUiState.Error(place = null, kind = kind)
+                }
+            )
+        }
+    }
+
+    private fun loadWeatherForPlace(targetPlace: Place, isRefreshing: Boolean) {
+        viewModelScope.launch {
             val currentState = _uiState.value
             if (isRefreshing && currentState is HomeUiState.Success) {
                 _uiState.update { currentState.copy(isRefreshing = true, transientError = null) }

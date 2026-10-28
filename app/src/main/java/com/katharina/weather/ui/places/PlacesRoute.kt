@@ -1,10 +1,17 @@
 package com.katharina.weather.ui.places
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.katharina.weather.domain.model.PlaceSelection
 
 @Composable
 fun PlacesRoute(
@@ -13,6 +20,17 @@ fun PlacesRoute(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.onSelectSavedPlace(PlaceSelection.CurrentLocation, onSelected = onBack)
+        } else {
+            viewModel.onSelectSavedPlace(PlaceSelection.CurrentLocation, onSelected = onBack)
+        }
+    }
 
     HomeScreenSnackbarHandler(
         state = state,
@@ -27,7 +45,20 @@ fun PlacesRoute(
             viewModel.onSearchResultClicked(result, onSaved = onBack)
         },
         onSelectSavedPlace = { selection ->
-            viewModel.onSelectSavedPlace(selection, onSelected = onBack)
+            if (selection is PlaceSelection.CurrentLocation) {
+                val hasPermission = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == PackageManager.PERMISSION_GRANTED
+
+                if (hasPermission) {
+                    viewModel.onSelectSavedPlace(selection, onSelected = onBack)
+                } else {
+                    permissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                }
+            } else {
+                viewModel.onSelectSavedPlace(selection, onSelected = onBack)
+            }
         },
         onDeletePlace = { place ->
             viewModel.onDeletePlace(place)

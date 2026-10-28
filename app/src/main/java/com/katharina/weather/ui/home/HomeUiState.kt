@@ -39,5 +39,7 @@ sealed interface ForecastState {
 enum class ErrorKind {
     Network,
     Server,
+    LocationPermissionRequired,
+    LocationUnavailable,
     Unknown
 }
