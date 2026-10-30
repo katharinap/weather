@@ -187,18 +187,22 @@ class HomeViewModel @Inject constructor(
                         transientError = currentResult.exceptionOrNull()?.localizedMessage ?: "Failed to refresh weather data."
                     )
                 } else {
-                    val kind = classifyError(currentResult.exceptionOrNull() ?: Exception())
+                    val kind = classifyError(currentResult.exceptionOrNull() ?: Exception(), targetPlace)
                     _uiState.value = HomeUiState.Error(place = targetPlace, kind = kind)
                 }
             }
         }
     }
 
-    private fun classifyError(throwable: Throwable): ErrorKind {
+    private fun classifyError(throwable: Throwable, place: Place?): ErrorKind {
+        val message = throwable.message ?: ""
+        if (message.contains("404") || message.contains("No sources match")) {
+            return if (place?.isCurrentLocation == true) ErrorKind.LocationUnavailable else ErrorKind.Server
+        }
+
         return when (throwable) {
             is IOException -> ErrorKind.Network
             else -> {
-                val message = throwable.message ?: ""
                 if (message.contains("5") || message.contains("Server") || message.contains("HTTP 5")) {
                     ErrorKind.Server
                 } else if (message.contains("4") || message.contains("HTTP 4")) {
