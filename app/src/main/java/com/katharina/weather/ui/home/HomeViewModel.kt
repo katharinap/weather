@@ -3,98 +3,218 @@ package com.katharina.weather.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.katharina.weather.data.location.GeocoderHelper
+import com.katharina.weather.data.local.LastKnownLocationFix
+import com.katharina.weather.data.local.LocationDataStore
+import com.katharina.weather.data.local.WeatherCacheDao
+import com.katharina.weather.data.util.distanceBetweenInKm
 import com.katharina.weather.domain.forecast.toDailyForecasts
 import com.katharina.weather.domain.forecast.upcoming
-import com.katharina.weather.domain.model.CURRENT_LOCATION_ID
-import com.katharina.weather.domain.model.LocationPermissionException
-import com.katharina.weather.domain.model.LocationUnavailableException
-import com.katharina.weather.domain.model.Place
-import com.katharina.weather.domain.model.PlaceSelection
+import com.katharina.weather.domain.model.*
 import com.katharina.weather.domain.repository.LocationProvider
 import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val placeRepository: PlaceRepository,
     private val weatherRepository: WeatherRepository,
     private val locationProvider: LocationProvider,
-    private val geocoderHelper: GeocoderHelper
+    private val geocoderHelper: GeocoderHelper,
+    private val locationDataStore: LocationDataStore,
+    private val weatherCacheDao: WeatherCacheDao
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    private var currentPlace: Place? = null
-    private var lastFetchedTime: Instant? = null
-    private var loadJob: Job? = null
-
-    init {
-        observeSelection()
+    private val tickerFlow: Flow<Instant> = flow {
+        while (true) {
+            emit(Instant.now())
+            delay(60_000L)
+        }
     }
 
-    private fun observeSelection() {
-        combine(
-            placeRepository.selection,
-            placeRepository.savedPlaces
-        ) { selection, savedPlaces ->
-            selection to savedPlaces
-        }.onEach { (selection, savedPlaces) ->
-            when (selection) {
-                is PlaceSelection.None -> {
-                    loadJob?.cancel()
-                    currentPlace = null
-                    _uiState.value = HomeUiState.NoPlace
-                }
-                is PlaceSelection.CurrentLocation -> {
-                    loadCurrentLocationWeather()
-                }
-                is PlaceSelection.Saved -> {
-                    val targetPlace = savedPlaces.find { it.id == selection.id }
-                    if (targetPlace == null) {
-                        loadJob?.cancel()
-                        currentPlace = null
-                        _uiState.value = HomeUiState.NoPlace
-                    } else if (targetPlace.id != currentPlace?.id) {
-                        currentPlace = targetPlace
-                        loadJob?.cancel()
-                        loadWeatherForPlace(targetPlace, isRefreshing = false)
+    private val _refreshState = MutableStateFlow<RefreshState>(RefreshState.Idle)
+    private val lastSuccessfulRefreshTime = ConcurrentHashMap<String, Instant>()
+
+    private var activePlace: Place? = null
+    private var refreshJob: Job? = null
+
+    val uiState: StateFlow<HomeUiState> = placeRepository.selection
+        .flatMapLatest { selection ->
+            observeSelectionStream(selection)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = HomeUiState.Loading
+        )
+
+    private fun observeSelectionStream(selection: PlaceSelection): Flow<HomeUiState> {
+        return when (selection) {
+            is PlaceSelection.None -> {
+                activePlace = null
+                flowOf(HomeUiState.NoPlace)
+            }
+            is PlaceSelection.CurrentLocation -> {
+                observeCurrentLocationStream()
+            }
+            is PlaceSelection.Saved -> {
+                observeSavedPlaceStream(selection.id)
+            }
+        }
+    }
+
+    private fun observeSavedPlaceStream(placeId: Long): Flow<HomeUiState> {
+        return placeRepository.savedPlaces.flatMapLatest { savedList ->
+            val place = savedList.find { it.id == placeId }
+            if (place == null) {
+                activePlace = null
+                flowOf(HomeUiState.NoPlace)
+            } else {
+                activePlace = place
+                observePlaceAndCache(place)
+            }
+        }
+    }
+
+    private fun observeCurrentLocationStream(): Flow<HomeUiState> {
+        return locationDataStore.lastLocation.flatMapLatest { lastFix ->
+            val initialPlace = if (lastFix != null) {
+                Place(
+                    id = CURRENT_LOCATION_ID,
+                    name = lastFix.name,
+                    region = null,
+                    country = null,
+                    latitude = lastFix.latitude,
+                    longitude = lastFix.longitude,
+                    isCurrentLocation = true
+                )
+            } else null
+
+            activePlace = initialPlace
+
+            // Trigger background location check and refresh
+            triggerCurrentLocationFetch(lastFix)
+
+            if (initialPlace != null) {
+                observePlaceAndCache(initialPlace)
+            } else {
+                // First time current location use
+                _refreshState.map { refState ->
+                    when (refState) {
+                        is RefreshState.Failed -> HomeUiState.Error(place = null, kind = refState.kind)
+                        else -> HomeUiState.Loading
                     }
                 }
             }
-        }.launchIn(viewModelScope)
+        }
+    }
+
+    private fun observePlaceAndCache(place: Place): Flow<HomeUiState> {
+        return combine(
+            weatherRepository.observe(place),
+            tickerFlow.onStart { emit(Instant.now()) },
+            _refreshState
+        ) { snapshot, now, refreshState ->
+            buildUiState(place, snapshot, now, refreshState)
+        }
+    }
+
+    private fun buildUiState(
+        place: Place,
+        snapshot: WeatherSnapshot,
+        now: Instant,
+        refreshState: RefreshState
+    ): HomeUiState {
+        val current = snapshot.current?.value
+        val forecast = snapshot.forecast?.value
+
+        if (current == null) {
+            return when (refreshState) {
+                is RefreshState.Failed -> HomeUiState.Error(place = place, kind = refreshState.kind)
+                else -> HomeUiState.Loading
+            }
+        }
+
+        val zoneId = ZoneId.of("Europe/Berlin")
+        val today = LocalDate.now(zoneId)
+
+        val hours24 = forecast?.upcoming(now, 24) ?: emptyList()
+        val hours48 = forecast?.upcoming(now, 48) ?: emptyList()
+        val days = forecast?.toDailyForecasts()?.filter { it.date >= today } ?: emptyList()
+
+        val observedAt = current.timestamp
+        val updatedAt = snapshot.current.fetchedAt
+
+        val isOutdated = Staleness.isOutdated(snapshot, now)
+        val outdatedHours = Duration.between(updatedAt, now).toHours()
+
+        val isRefreshing = refreshState is RefreshState.Refreshing
+        val refreshFailed = refreshState is RefreshState.Failed
+
+        val bannerMessage = if (refreshFailed) {
+            val formattedTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                .withZone(zoneId)
+                .format(updatedAt)
+            "Can't refresh. Showing data from $formattedTime."
+        } else null
+
+        val userError = (refreshState as? RefreshState.Failed)?.userInitiatedMessage
+
+        return HomeUiState.Success(
+            weather = current,
+            place = place,
+            observedAt = observedAt,
+            updatedAt = updatedAt,
+            hours24 = hours24,
+            hours48 = hours48,
+            days = days,
+            isRefreshing = isRefreshing,
+            refreshFailed = refreshFailed,
+            isOutdated = isOutdated,
+            outdatedHours = outdatedHours,
+            bannerMessage = bannerMessage,
+            userPullToRefreshError = userError
+        )
     }
 
     fun onStart() {
-        val place = currentPlace ?: return
-        val currentState = _uiState.value
-        if (currentState is HomeUiState.Success) {
-            if (lastFetchedTime != null && Duration.between(lastFetchedTime, Instant.now()).toMinutes() >= 15) {
-                refresh()
-            }
-        } else if (currentState is HomeUiState.Loading) {
-            loadWeatherForPlace(place, isRefreshing = false)
+        val place = activePlace ?: return
+        val currentUiState = uiState.value
+        val snapshot = if (currentUiState is HomeUiState.Success) {
+            WeatherSnapshot(
+                current = Cached(currentUiState.weather, currentUiState.updatedAt ?: Instant.EPOCH),
+                forecast = Cached(emptyList(), currentUiState.updatedAt ?: Instant.EPOCH)
+            )
+        } else WeatherSnapshot(null, null)
+
+        val now = Instant.now()
+        if (Staleness.needsRefresh(snapshot, now)) {
+            triggerRefresh(place, userInitiated = false)
         }
     }
 
-    fun refresh() {
-        val currentState = _uiState.value
-        if (currentState is HomeUiState.Success && currentState.place.isCurrentLocation) {
-            loadCurrentLocationWeather()
-        } else {
-            val place = currentPlace ?: return
-            loadWeatherForPlace(place, isRefreshing = true)
+    fun refresh(userInitiated: Boolean = true) {
+        val place = activePlace ?: return
+        if (userInitiated) {
+            val lastTime = lastSuccessfulRefreshTime[place.cacheKey()]
+            if (lastTime != null && Duration.between(lastTime, Instant.now()) < Staleness.MIN_REFRESH_INTERVAL) {
+                return
+            }
         }
+        triggerRefresh(place, userInitiated = userInitiated)
     }
 
     fun selectCurrentLocation() {
@@ -103,15 +223,24 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun loadCurrentLocationWeather() {
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            _uiState.value = HomeUiState.Loading
+    private fun triggerCurrentLocationFetch(lastFix: LastKnownLocationFix?) {
+        viewModelScope.launch {
+            _refreshState.value = RefreshState.Refreshing
             val coordsResult = locationProvider.currentLocation()
             coordsResult.fold(
                 onSuccess = { coords ->
                     val placeName = geocoderHelper.getPlaceName(coords)
-                    val currentLocationPlace = Place(
+
+                    if (lastFix != null) {
+                        val distance = distanceBetweenInKm(lastFix.latitude, lastFix.longitude, coords.latitude, coords.longitude)
+                        if (distance > 10.0) {
+                            weatherCacheDao.deleteForPlace("current")
+                        }
+                    }
+
+                    locationDataStore.saveLastLocation(coords.latitude, coords.longitude, placeName)
+
+                    val newPlace = Place(
                         id = CURRENT_LOCATION_ID,
                         name = placeName,
                         region = null,
@@ -120,8 +249,8 @@ class HomeViewModel @Inject constructor(
                         longitude = coords.longitude,
                         isCurrentLocation = true
                     )
-                    currentPlace = currentLocationPlace
-                    loadWeatherForPlace(currentLocationPlace, isRefreshing = false)
+                    activePlace = newPlace
+                    triggerRefresh(newPlace, userInitiated = false)
                 },
                 onFailure = { throwable ->
                     val kind = when (throwable) {
@@ -129,67 +258,25 @@ class HomeViewModel @Inject constructor(
                         is LocationUnavailableException -> ErrorKind.LocationUnavailable
                         else -> ErrorKind.LocationUnavailable
                     }
-                    _uiState.value = HomeUiState.Error(place = null, kind = kind)
+                    _refreshState.value = RefreshState.Failed(kind = kind, userInitiatedMessage = null)
                 }
             )
         }
     }
 
-    private fun loadWeatherForPlace(targetPlace: Place, isRefreshing: Boolean) {
-        viewModelScope.launch {
-            val currentState = _uiState.value
-            if (isRefreshing && currentState is HomeUiState.Success) {
-                _uiState.update { currentState.copy(isRefreshing = true, transientError = null) }
-            } else if (!isRefreshing) {
-                _uiState.value = HomeUiState.Loading
-            }
-
-            val (currentResult, forecastResult) = coroutineScope {
-                val c = async { weatherRepository.getCurrentWeather(targetPlace.latitude, targetPlace.longitude) }
-                val f = async { weatherRepository.getWeather(targetPlace.latitude, targetPlace.longitude, days = 7) }
-                c.await() to f.await()
-            }
-
-            if (currentPlace?.id != targetPlace.id) return@launch
-
-            val now = Instant.now()
-            val previousSuccess = currentState as? HomeUiState.Success
-
-            if (currentResult.isSuccess) {
-                val weather = currentResult.getOrThrow()
-                val forecastState = if (forecastResult.isSuccess) {
-                    val forecastList = forecastResult.getOrThrow()
-                    val hours24 = forecastList.upcoming(now, 24)
-                    val hours48 = forecastList.upcoming(now, 48)
-                    val days = forecastList.toDailyForecasts()
-                    ForecastState.Loaded(hours24 = hours24, hours48 = hours48, days = days)
-                } else {
-                    previousSuccess?.forecast ?: ForecastState.Unavailable
-                }
-
-                val transientErr = if (forecastResult.isFailure && currentResult.isSuccess && isRefreshing) {
-                    forecastResult.exceptionOrNull()?.localizedMessage ?: "Failed to refresh forecast."
-                } else null
-
-                lastFetchedTime = now
-                _uiState.value = HomeUiState.Success(
-                    weather = weather,
-                    place = targetPlace,
-                    fetchedAt = lastFetchedTime,
-                    forecast = forecastState,
-                    isRefreshing = false,
-                    transientError = transientErr
-                )
+    private fun triggerRefresh(place: Place, userInitiated: Boolean) {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            _refreshState.value = RefreshState.Refreshing
+            val outcome = weatherRepository.refresh(place)
+            if (outcome.allFailed) {
+                val error = outcome.firstError ?: Exception()
+                val kind = classifyError(error, place)
+                val userMsg = if (userInitiated) "Failed to refresh weather data." else null
+                _refreshState.value = RefreshState.Failed(kind = kind, userInitiatedMessage = userMsg)
             } else {
-                if (previousSuccess != null) {
-                    _uiState.value = previousSuccess.copy(
-                        isRefreshing = false,
-                        transientError = currentResult.exceptionOrNull()?.localizedMessage ?: "Failed to refresh weather data."
-                    )
-                } else {
-                    val kind = classifyError(currentResult.exceptionOrNull() ?: Exception(), targetPlace)
-                    _uiState.value = HomeUiState.Error(place = targetPlace, kind = kind)
-                }
+                lastSuccessfulRefreshTime[place.cacheKey()] = Instant.now()
+                _refreshState.value = RefreshState.Idle
             }
         }
     }
@@ -212,5 +299,11 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    sealed interface RefreshState {
+        data object Idle : RefreshState
+        data object Refreshing : RefreshState
+        data class Failed(val kind: ErrorKind, val userInitiatedMessage: String?) : RefreshState
     }
 }

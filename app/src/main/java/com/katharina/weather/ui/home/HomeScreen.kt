@@ -4,10 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -26,8 +28,8 @@ import com.katharina.weather.domain.model.CurrentWeather
 import com.katharina.weather.domain.model.DailyForecast
 import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.model.Place
-import com.katharina.weather.domain.model.WeatherCondition
 import com.katharina.weather.ui.format.formatObservationTime
+import com.katharina.weather.ui.format.formatRelativeTime
 import com.katharina.weather.ui.format.getWeatherIconRes
 import com.katharina.weather.ui.format.toNameStringRes
 import com.katharina.weather.ui.home.chart.HourlyChart
@@ -98,7 +100,7 @@ fun HomeScreen(
                         onRefresh = onRefresh,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        SuccessContent(weather = state.weather, place = state.place, forecastState = state.forecast)
+                        SuccessContent(state = state)
                     }
                 }
             }
@@ -183,20 +185,56 @@ fun ErrorContent(kind: ErrorKind, onRetry: () -> Unit, modifier: Modifier = Modi
 
 @Composable
 fun SuccessContent(
-    weather: CurrentWeather,
-    place: Place,
-    forecastState: ForecastState,
+    state: HomeUiState.Success,
     modifier: Modifier = Modifier
 ) {
+    val weather = state.weather
+    val now = Instant.now()
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Header
+        // Offline Banner
+        if (state.bannerMessage != null) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = state.bannerMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(12.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        // Outdated Warning Label
+        if (state.isOutdated) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = "Data is ${state.outdatedHours} h old",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(12.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        // Main Weather Header
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
                 painter = painterResource(id = getWeatherIconRes(weather.icon)),
@@ -216,7 +254,7 @@ fun SuccessContent(
             )
         }
 
-        // Detail cards grid (2 columns) with equal height per row
+        // Detail cards grid (2 columns)
         Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -292,35 +330,38 @@ fun SuccessContent(
             }
         }
 
-        // Forecast Section (Hourly Strip, Daily List, Hourly Chart)
-        when (forecastState) {
-            is ForecastState.Loaded -> {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    HourlyStrip(hours = forecastState.hours24)
-                    DailyList(days = forecastState.days)
-                    HourlyChart(hours = forecastState.hours48)
+        // Forecast Section
+        if (state.hours24.isNotEmpty() || state.days.isNotEmpty()) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (state.hours24.isNotEmpty()) {
+                    HourlyStrip(hours = state.hours24)
+                }
+                if (state.days.isNotEmpty()) {
+                    DailyList(days = state.days)
+                }
+                if (state.hours48.isNotEmpty()) {
+                    HourlyChart(hours = state.hours48)
                 }
             }
-            is ForecastState.Unavailable -> {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.forecast_unavailable),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.forecast_unavailable),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -331,11 +372,15 @@ fun SuccessContent(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.padding(vertical = 16.dp)
         ) {
+            val observedTimeStr = formatObservationTime(weather.timestamp)
+            val updatedTimeStr = state.updatedAt?.let { formatRelativeTime(it, now) } ?: "–"
+
             Text(
-                text = stringResource(R.string.format_observed, formatObservationTime(weather.timestamp)),
+                text = "Observed $observedTimeStr · Updated $updatedTimeStr",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
             val stationName = weather.stationName ?: "–"
             val distanceKm = (weather.stationDistance ?: 0.0) / 1000.0
             Text(
@@ -573,30 +618,12 @@ fun HomeScreenLoadingPreview() {
 
 @Preview(showBackground = true)
 @Composable
-fun HomeScreenErrorLocationPermissionPreview() {
+fun HomeScreenErrorPreview() {
     WeatherTheme {
         HomeScreen(
             state = HomeUiState.Error(
                 place = null,
-                kind = ErrorKind.LocationPermissionRequired
-            ),
-            onRefresh = {},
-            onRetry = {},
-            onNavigateToPlaces = {},
-            onUseCurrentLocation = {},
-            snackbarHostState = SnackbarHostState()
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun HomeScreenErrorLocationUnavailablePreview() {
-    WeatherTheme {
-        HomeScreen(
-            state = HomeUiState.Error(
-                place = null,
-                kind = ErrorKind.LocationUnavailable
+                kind = ErrorKind.Network
             ),
             onRefresh = {},
             onRetry = {},

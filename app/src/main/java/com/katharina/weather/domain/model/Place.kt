@@ -1,7 +1,5 @@
 package com.katharina.weather.domain.model
 
-const val CURRENT_LOCATION_ID = -1L
-
 data class Place(
     val id: Long,
     val name: String,
@@ -9,5 +7,9 @@ data class Place(
     val country: String?,
     val latitude: Double,
     val longitude: Double,
-    val isCurrentLocation: Boolean = false,
+    val isCurrentLocation: Boolean = false
 )
+
+const val CURRENT_LOCATION_ID = -1L
+
+fun Place.cacheKey(): String = if (isCurrentLocation) "current" else "saved:$id"

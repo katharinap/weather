@@ -31,18 +31,18 @@ fun HomeRoute(
     }
 
     if (state is HomeUiState.Success) {
-        val transientError = (state as HomeUiState.Success).transientError
-        if (transientError != null) {
-            LaunchedEffect(transientError) {
-                snackbarHostState.showSnackbar(transientError)
+        val userError = (state as HomeUiState.Success).userPullToRefreshError
+        if (userError != null) {
+            LaunchedEffect(userError) {
+                snackbarHostState.showSnackbar(userError)
             }
         }
     }
 
     HomeScreen(
         state = state,
-        onRefresh = { viewModel.refresh() },
-        onRetry = { viewModel.refresh() },
+        onRefresh = { viewModel.refresh(userInitiated = true) },
+        onRetry = { viewModel.refresh(userInitiated = false) },
         onNavigateToPlaces = onNavigateToPlaces,
         onUseCurrentLocation = {
             val hasPermission = ContextCompat.checkSelfPermission(

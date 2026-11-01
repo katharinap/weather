@@ -14,26 +14,23 @@ sealed interface HomeUiState {
     data class Success(
         val weather: CurrentWeather,
         val place: Place,
-        val fetchedAt: Instant?,
-        val forecast: ForecastState = ForecastState.Unavailable,
+        val observedAt: Instant?,
+        val updatedAt: Instant?,
+        val hours24: List<HourlyForecast> = emptyList(),
+        val hours48: List<HourlyForecast> = emptyList(),
+        val days: List<DailyForecast> = emptyList(),
         val isRefreshing: Boolean = false,
-        val transientError: String? = null
+        val refreshFailed: Boolean = false,
+        val isOutdated: Boolean = false,
+        val outdatedHours: Long = 0,
+        val bannerMessage: String? = null,
+        val userPullToRefreshError: String? = null
     ) : HomeUiState
 
     data class Error(
         val place: Place?,
         val kind: ErrorKind
     ) : HomeUiState
-}
-
-sealed interface ForecastState {
-    data class Loaded(
-        val hours24: List<HourlyForecast>,
-        val hours48: List<HourlyForecast>,
-        val days: List<DailyForecast>
-    ) : ForecastState
-
-    data object Unavailable : ForecastState
 }
 
 enum class ErrorKind {
