@@ -24,6 +24,7 @@ sealed interface HomeUiState {
         val isOutdated: Boolean = false,
         val outdatedHours: Long = 0,
         val bannerMessage: String? = null,
+        val isOfflineBanner: Boolean = false,
         val userPullToRefreshError: String? = null
     ) : HomeUiState
 

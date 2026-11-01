@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -28,6 +27,7 @@ import com.katharina.weather.domain.model.CurrentWeather
 import com.katharina.weather.domain.model.DailyForecast
 import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.model.Place
+import com.katharina.weather.domain.model.WeatherCondition
 import com.katharina.weather.ui.format.formatObservationTime
 import com.katharina.weather.ui.format.formatRelativeTime
 import com.katharina.weather.ui.format.getWeatherIconRes
@@ -67,10 +67,19 @@ fun HomeScreen(
                     Text(text = titleText)
                 },
                 actions = {
-                    Button(onClick = onNavigateToPlaces) {
-                        Text(text = stringResource(R.string.title_places))
+                    FilledTonalIconButton(
+                        onClick = onNavigateToPlaces,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_location_on),
+                            contentDescription = stringResource(R.string.title_places)
+                        )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -199,17 +208,28 @@ fun SuccessContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Offline Banner
+        // Refresh-Failure Banner
         if (state.bannerMessage != null) {
+            val containerColor = if (state.isOfflineBanner) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.errorContainer
+            }
+            val contentColor = if (state.isOfflineBanner) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onErrorContainer
+            }
+
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.errorContainer,
+                color = containerColor,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
                     text = state.bannerMessage,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    color = contentColor,
                     modifier = Modifier.padding(12.dp),
                     textAlign = TextAlign.Center
                 )
@@ -588,10 +608,32 @@ fun formatRainHourly(p60: Double?): String {
 // Previews
 @Preview(showBackground = true)
 @Composable
-fun HomeScreenNoPlacePreview() {
+fun HomeScreenOfflineBannerPreview() {
     WeatherTheme {
         HomeScreen(
-            state = HomeUiState.NoPlace,
+            state = HomeUiState.Success(
+                weather = CurrentWeather(
+                    timestamp = Instant.now(),
+                    temperature = 18.0,
+                    condition = WeatherCondition.SUNNY,
+                    icon = "sunny",
+                    windSpeed = 5.0,
+                    windGustSpeed = 10.0,
+                    windDirection = 90,
+                    cloudCover = 0,
+                    relativeHumidity = 50,
+                    precipitation10 = 0.0,
+                    precipitation60 = 0.0,
+                    stationName = "Munich",
+                    stationDistance = 1000.0
+                ),
+                place = Place(1, "Garching", "Munich, Bavaria", "Germany", 48.248, 11.651),
+                observedAt = Instant.now(),
+                updatedAt = Instant.now(),
+                refreshFailed = true,
+                bannerMessage = "You're offline. Showing data from 18:00.",
+                isOfflineBanner = true
+            ),
             onRefresh = {},
             onRetry = {},
             onNavigateToPlaces = {},
@@ -603,27 +645,31 @@ fun HomeScreenNoPlacePreview() {
 
 @Preview(showBackground = true)
 @Composable
-fun HomeScreenLoadingPreview() {
+fun HomeScreenErrorBannerPreview() {
     WeatherTheme {
         HomeScreen(
-            state = HomeUiState.Loading,
-            onRefresh = {},
-            onRetry = {},
-            onNavigateToPlaces = {},
-            onUseCurrentLocation = {},
-            snackbarHostState = SnackbarHostState()
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun HomeScreenErrorPreview() {
-    WeatherTheme {
-        HomeScreen(
-            state = HomeUiState.Error(
-                place = null,
-                kind = ErrorKind.Network
+            state = HomeUiState.Success(
+                weather = CurrentWeather(
+                    timestamp = Instant.now(),
+                    temperature = 18.0,
+                    condition = WeatherCondition.SUNNY,
+                    icon = "sunny",
+                    windSpeed = 5.0,
+                    windGustSpeed = 10.0,
+                    windDirection = 90,
+                    cloudCover = 0,
+                    relativeHumidity = 50,
+                    precipitation10 = 0.0,
+                    precipitation60 = 0.0,
+                    stationName = "Munich",
+                    stationDistance = 1000.0
+                ),
+                place = Place(1, "Garching", "Munich, Bavaria", "Germany", 48.248, 11.651),
+                observedAt = Instant.now(),
+                updatedAt = Instant.now(),
+                refreshFailed = true,
+                bannerMessage = "Can't refresh. Showing data from 18:00.",
+                isOfflineBanner = false
             ),
             onRefresh = {},
             onRetry = {},

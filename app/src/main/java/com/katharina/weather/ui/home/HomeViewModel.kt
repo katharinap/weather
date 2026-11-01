@@ -2,10 +2,10 @@ package com.katharina.weather.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.katharina.weather.data.location.GeocoderHelper
 import com.katharina.weather.data.local.LastKnownLocationFix
 import com.katharina.weather.data.local.LocationDataStore
 import com.katharina.weather.data.local.WeatherCacheDao
+import com.katharina.weather.data.location.GeocoderHelper
 import com.katharina.weather.data.util.distanceBetweenInKm
 import com.katharina.weather.domain.forecast.toDailyForecasts
 import com.katharina.weather.domain.forecast.upcoming
@@ -24,6 +24,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -164,11 +165,16 @@ class HomeViewModel @Inject constructor(
         val isRefreshing = refreshState is RefreshState.Refreshing
         val refreshFailed = refreshState is RefreshState.Failed
 
+        val isOfflineBanner = refreshState is RefreshState.Failed && refreshState.kind == ErrorKind.Network
         val bannerMessage = if (refreshFailed) {
-            val formattedTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+            val formattedTime = DateTimeFormatter.ofPattern("HH:mm")
                 .withZone(zoneId)
                 .format(updatedAt)
-            "Can't refresh. Showing data from $formattedTime."
+            if (isOfflineBanner) {
+                "You're offline. Showing data from $formattedTime."
+            } else {
+                "Can't refresh. Showing data from $formattedTime."
+            }
         } else null
 
         val userError = (refreshState as? RefreshState.Failed)?.userInitiatedMessage
@@ -186,6 +192,7 @@ class HomeViewModel @Inject constructor(
             isOutdated = isOutdated,
             outdatedHours = outdatedHours,
             bannerMessage = bannerMessage,
+            isOfflineBanner = isOfflineBanner,
             userPullToRefreshError = userError
         )
     }
