@@ -95,4 +95,5 @@
     <string name="error_unknown">An unexpected error occurred.</string>
     <string name="btn_retry">Retry</string>
     <string name="transient_error_refresh">Failed to refresh weather data.</string>
+    <string name="attribution_meteocons">Icons: Meteocons</string>
 </resources>

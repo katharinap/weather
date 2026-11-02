@@ -423,6 +423,11 @@ fun SuccessContent(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
+            Text(
+                text = stringResource(R.string.attribution_meteocons),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
         }
     }
 }

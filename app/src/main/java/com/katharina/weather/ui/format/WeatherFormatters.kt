@@ -14,19 +14,19 @@ import java.util.Locale
 fun getWeatherIconRes(icon: String?): Int {
     val normalized = icon?.lowercase()?.replace('_', '-')
     return when (normalized) {
-        "sunny", "clear-day" -> R.drawable.ic_weather_clear_day
-        "clear-night" -> R.drawable.ic_weather_clear_night
-        "partly-cloudy", "partly-cloudy-day" -> R.drawable.ic_weather_partly_cloudy_day
-        "partly-cloudy-night" -> R.drawable.ic_weather_partly_cloudy_night
-        "cloudy", "overcast" -> R.drawable.ic_weather_cloudy
-        "fog", "foggy" -> R.drawable.ic_weather_fog
-        "wind", "windy" -> R.drawable.ic_weather_wind
-        "rain", "heavy-rain", "light-rain" -> R.drawable.ic_weather_rain
-        "sleet" -> R.drawable.ic_weather_sleet
-        "snow", "heavy-snow", "light-snow" -> R.drawable.ic_weather_snow
-        "hail" -> R.drawable.ic_weather_hail
-        "thunderstorm" -> R.drawable.ic_weather_thunderstorm
-        else -> R.drawable.ic_weather_unknown
+        "sunny", "clear-day" -> R.drawable.ic_weather_fill_clear_day
+        "clear-night" -> R.drawable.ic_weather_fill_clear_night
+        "partly-cloudy", "partly-cloudy-day" -> R.drawable.ic_weather_fill_partly_cloudy_day
+        "partly-cloudy-night" -> R.drawable.ic_weather_fill_partly_cloudy_night
+        "cloudy", "overcast" -> R.drawable.ic_weather_fill_cloudy
+        "fog", "foggy" -> R.drawable.ic_weather_fill_fog
+        "wind", "windy" -> R.drawable.ic_weather_fill_wind
+        "rain", "heavy-rain", "light-rain" -> R.drawable.ic_weather_fill_rain
+        "sleet" -> R.drawable.ic_weather_fill_sleet
+        "snow", "heavy-snow", "light-snow" -> R.drawable.ic_weather_fill_snow
+        "hail" -> R.drawable.ic_weather_fill_hail
+        "thunderstorm" -> R.drawable.ic_weather_fill_thunderstorm
+        else -> R.drawable.ic_weather_fill_unknown
     }
 }
 
