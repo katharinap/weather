@@ -109,17 +109,16 @@ class WeatherRepositoryImpl @Inject constructor(
             onSuccess = { dto ->
                 try {
                     val payload = json.encodeToString(dto)
-                    weatherCacheDao.upsert(
-                        WeatherCacheEntity(
-                            placeKey = place.cacheKey(),
-                            kind = "current",
-                            fetchedAt = nowEpoch,
-                            formatVersion = CACHE_FORMAT_VERSION,
-                            latitude = place.latitude,
-                            longitude = place.longitude,
-                            payload = payload
-                        )
+                    val entity = WeatherCacheEntity(
+                        placeKey = place.cacheKey(),
+                        kind = "current",
+                        fetchedAt = nowEpoch,
+                        formatVersion = CACHE_FORMAT_VERSION,
+                        latitude = place.latitude,
+                        longitude = place.longitude,
+                        payload = payload
                     )
+                    weatherCacheDao.upsert(entity)
                     Result.success(Unit)
                 } catch (e: Exception) {
                     Result.failure(e)
@@ -132,17 +131,16 @@ class WeatherRepositoryImpl @Inject constructor(
             onSuccess = { dto ->
                 try {
                     val payload = json.encodeToString(dto)
-                    weatherCacheDao.upsert(
-                        WeatherCacheEntity(
-                            placeKey = place.cacheKey(),
-                            kind = "forecast",
-                            fetchedAt = nowEpoch,
-                            formatVersion = CACHE_FORMAT_VERSION,
-                            latitude = place.latitude,
-                            longitude = place.longitude,
-                            payload = payload
-                        )
+                    val entity = WeatherCacheEntity(
+                        placeKey = place.cacheKey(),
+                        kind = "forecast",
+                        fetchedAt = nowEpoch,
+                        formatVersion = CACHE_FORMAT_VERSION,
+                        latitude = place.latitude,
+                        longitude = place.longitude,
+                        payload = payload
                     )
+                    weatherCacheDao.upsert(entity)
                     Result.success(Unit)
                 } catch (e: Exception) {
                     Result.failure(e)

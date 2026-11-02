@@ -1,6 +1,7 @@
 package com.katharina.weather.data.work
 
 import android.content.Context
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.katharina.weather.domain.usecase.RefreshResult
@@ -17,7 +18,13 @@ class RefreshWeatherWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        return when (refreshSelectedPlaceUseCase()) {
+        val useCaseResult = refreshSelectedPlaceUseCase()
+        Log.d(
+            "RefreshWeatherWorker",
+            "Work finished with result ${useCaseResult.outcome} for place ${useCaseResult.placeKey} (attempt $runAttemptCount)"
+        )
+
+        return when (useCaseResult.outcome) {
             RefreshResult.Done, RefreshResult.GiveUp -> Result.success()
             RefreshResult.Retry -> {
                 if (runAttemptCount < 3) Result.retry() else Result.success()

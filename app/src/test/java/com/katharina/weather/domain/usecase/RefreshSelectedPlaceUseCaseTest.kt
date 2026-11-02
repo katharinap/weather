@@ -3,7 +3,6 @@ package com.katharina.weather.domain.usecase
 import com.katharina.weather.data.local.LastKnownLocationFix
 import com.katharina.weather.data.local.LocationDataStore
 import com.katharina.weather.data.local.WeatherCacheDao
-import com.katharina.weather.data.local.WeatherCacheEntity
 import com.katharina.weather.domain.model.*
 import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
@@ -51,7 +50,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.Done, result)
+        assertEquals(RefreshResult.Done, result.outcome)
+        assertEquals(null, result.placeKey)
         assertEquals(0, fakeWeatherRepository.refreshCallCount)
     }
 
@@ -64,7 +64,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.Done, result)
+        assertEquals(RefreshResult.Done, result.outcome)
+        assertEquals(place.cacheKey(), result.placeKey)
         assertEquals(1, fakeWeatherRepository.refreshCallCount)
         coVerify { mockDao.deleteOrphansInternal(listOf(place.cacheKey())) }
         coVerify { mockDao.deleteOlderThan(any()) }
@@ -78,7 +79,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.Done, result)
+        assertEquals(RefreshResult.Done, result.outcome)
+        assertEquals("current", result.placeKey)
         assertEquals(1, fakeWeatherRepository.refreshCallCount)
     }
 
@@ -89,7 +91,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.Done, result)
+        assertEquals(RefreshResult.Done, result.outcome)
+        assertEquals("current", result.placeKey)
         assertEquals(0, fakeWeatherRepository.refreshCallCount)
     }
 
@@ -105,7 +108,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.Retry, result)
+        assertEquals(RefreshResult.Retry, result.outcome)
+        assertEquals(place.cacheKey(), result.placeKey)
     }
 
     @Test
@@ -120,7 +124,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.GiveUp, result)
+        assertEquals(RefreshResult.GiveUp, result.outcome)
+        assertEquals(place.cacheKey(), result.placeKey)
     }
 
     @Test
@@ -135,7 +140,8 @@ class RefreshSelectedPlaceUseCaseTest {
 
         val result = useCase()
 
-        assertEquals(RefreshResult.Done, result)
+        assertEquals(RefreshResult.Done, result.outcome)
+        assertEquals(place.cacheKey(), result.placeKey)
     }
 }
 

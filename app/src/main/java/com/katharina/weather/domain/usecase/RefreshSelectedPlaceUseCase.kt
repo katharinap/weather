@@ -21,6 +21,11 @@ enum class RefreshResult {
     GiveUp
 }
 
+data class RefreshUseCaseResult(
+    val outcome: RefreshResult,
+    val placeKey: String?
+)
+
 class RefreshSelectedPlaceUseCase @Inject constructor(
     private val placeRepository: PlaceRepository,
     private val weatherRepository: WeatherRepository,
@@ -28,12 +33,12 @@ class RefreshSelectedPlaceUseCase @Inject constructor(
     private val weatherCacheDao: WeatherCacheDao,
     private val clock: Clock = Clock.systemUTC()
 ) {
-    suspend operator fun invoke(): RefreshResult {
+    suspend operator fun invoke(): RefreshUseCaseResult {
         val selection = placeRepository.selection.first()
         val place = when (selection) {
-            is PlaceSelection.None -> return RefreshResult.Done
+            is PlaceSelection.None -> return RefreshUseCaseResult(RefreshResult.Done, null)
             is PlaceSelection.CurrentLocation -> {
-                val lastFix = locationDataStore.lastLocation.first() ?: return RefreshResult.Done
+                val lastFix = locationDataStore.lastLocation.first() ?: return RefreshUseCaseResult(RefreshResult.Done, "current")
                 Place(
                     id = CURRENT_LOCATION_ID,
                     name = lastFix.name,
@@ -46,7 +51,7 @@ class RefreshSelectedPlaceUseCase @Inject constructor(
             }
             is PlaceSelection.Saved -> {
                 val savedPlaces = placeRepository.savedPlaces.first()
-                savedPlaces.find { it.id == selection.id } ?: return RefreshResult.Done
+                savedPlaces.find { it.id == selection.id } ?: return RefreshUseCaseResult(RefreshResult.Done, "saved:${selection.id}")
             }
         }
 
@@ -59,18 +64,20 @@ class RefreshSelectedPlaceUseCase @Inject constructor(
         val sevenDaysAgo = clock.millis() - Duration.ofDays(7).toMillis()
         weatherCacheDao.deleteOlderThan(sevenDaysAgo)
 
-        if (outcome.allFailed) {
+        val refreshResult = if (outcome.allFailed) {
             val firstError = outcome.firstError
             val message = firstError?.message ?: ""
-            return if (message.contains("404") || message.contains("No sources match")) {
+            if (message.contains("404") || message.contains("No sources match")) {
                 RefreshResult.GiveUp
             } else if (firstError is IOException || message.contains("5") || message.contains("Server")) {
                 RefreshResult.Retry
             } else {
                 RefreshResult.Retry
             }
+        } else {
+            RefreshResult.Done
         }
 
-        return RefreshResult.Done
+        return RefreshUseCaseResult(outcome = refreshResult, placeKey = place.cacheKey())
     }
 }

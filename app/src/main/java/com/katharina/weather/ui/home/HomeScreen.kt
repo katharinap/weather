@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -15,6 +16,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -28,6 +30,7 @@ import com.katharina.weather.domain.model.DailyForecast
 import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.model.WeatherCondition
+import com.katharina.weather.ui.debug.triggerDebugWorker
 import com.katharina.weather.ui.format.formatObservationTime
 import com.katharina.weather.ui.format.formatRelativeTime
 import com.katharina.weather.ui.format.getWeatherIconRes
@@ -199,6 +202,7 @@ fun SuccessContent(
 ) {
     val weather = state.weather
     val now = Instant.now()
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
@@ -398,7 +402,12 @@ fun SuccessContent(
             Text(
                 text = "Observed $observedTimeStr · Updated $updatedTimeStr",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { triggerDebugWorker(context) }
+                    )
+                }
             )
 
             val stationName = weather.stationName ?: "–"
