@@ -5,6 +5,7 @@ import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.data.local.WeatherCacheEntity
 import com.katharina.weather.data.local.deleteOrphans
 import com.katharina.weather.data.remote.BrightSkyApi
+import com.katharina.weather.data.remote.dto.AlertsResponseDto
 import com.katharina.weather.data.remote.dto.CurrentWeatherEntryDto
 import com.katharina.weather.data.remote.dto.CurrentWeatherResponseDto
 import com.katharina.weather.data.remote.dto.WeatherResponseDto
@@ -45,7 +46,7 @@ class WeatherRepositoryImplTest {
 
         assertTrue(outcome.current.isSuccess)
         assertTrue(outcome.forecast.isSuccess)
-        assertEquals(2, fakeDao.entities.size)
+        assertEquals(3, fakeDao.entities.size) // current, forecast, alerts
     }
 
     @Test
@@ -174,8 +175,10 @@ class FakeWeatherCacheDao : WeatherCacheDao {
 class FakeBrightSkyApi : BrightSkyApi {
     var currentDto = CurrentWeatherResponseDto(weather = CurrentWeatherEntryDto(temperature = 20.0, icon = "sunny"))
     var weatherDto = WeatherResponseDto(weather = emptyList())
+    var alertsDto = AlertsResponseDto(alerts = emptyList())
     var currentException: Exception? = null
     var weatherException: Exception? = null
+    var alertsException: Exception? = null
 
     override suspend fun currentWeather(lat: Double, lon: Double, tz: String?): CurrentWeatherResponseDto {
         currentException?.let { throw it }
@@ -185,5 +188,10 @@ class FakeBrightSkyApi : BrightSkyApi {
     override suspend fun weather(lat: Double, lon: Double, date: String, lastDate: String, tz: String?): WeatherResponseDto {
         weatherException?.let { throw it }
         return weatherDto
+    }
+
+    override suspend fun alerts(lat: Double, lon: Double, tz: String): AlertsResponseDto {
+        alertsException?.let { throw it }
+        return alertsDto
     }
 }

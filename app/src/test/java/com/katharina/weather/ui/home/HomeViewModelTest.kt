@@ -70,7 +70,8 @@ class HomeViewModelTest {
         val currentWeather = mockCurrentWeather()
         val snapshot = WeatherSnapshot(
             current = Cached(currentWeather, Instant.now()),
-            forecast = Cached(emptyList(), Instant.now())
+            forecast = Cached(emptyList(), Instant.now()),
+            alerts = Cached(AlertsResult(emptyList(), null), Instant.now())
         )
 
         fakePlaceRepository.placesFlow.value = listOf(place)
@@ -102,7 +103,8 @@ class HomeViewModelTest {
         val currentWeather = mockCurrentWeather()
         val snapshot = WeatherSnapshot(
             current = Cached(currentWeather, Instant.now()),
-            forecast = Cached(emptyList(), Instant.now())
+            forecast = Cached(emptyList(), Instant.now()),
+            alerts = Cached(AlertsResult(emptyList(), null), Instant.now())
         )
 
         fakePlaceRepository.placesFlow.value = listOf(place)
@@ -110,7 +112,8 @@ class HomeViewModelTest {
         fakeWeatherRepository.snapshots[place.cacheKey()] = snapshot
         fakeWeatherRepository.refreshOutcome = RefreshOutcome(
             current = Result.failure(IOException("Network error")),
-            forecast = Result.failure(IOException("Network error"))
+            forecast = Result.failure(IOException("Network error")),
+            alerts = Result.failure(IOException("Network error"))
         )
 
         val viewModel = HomeViewModel(
@@ -145,7 +148,8 @@ class HomeViewModelTest {
         fakePlaceRepository.selectionFlow.value = PlaceSelection.Saved(1L)
         fakeWeatherRepository.refreshOutcome = RefreshOutcome(
             current = Result.failure(IOException("Network error")),
-            forecast = Result.failure(IOException("Network error"))
+            forecast = Result.failure(IOException("Network error")),
+            alerts = Result.failure(IOException("Network error"))
         )
 
         val viewModel = HomeViewModel(
@@ -158,15 +162,11 @@ class HomeViewModelTest {
         )
 
         viewModel.uiState.test {
-            runCurrent()
+            awaitItem() // Initial Loading
+            testScheduler.runCurrent()
             viewModel.refresh(userInitiated = false)
-            runCurrent()
-            val events = cancelAndConsumeRemainingEvents()
-            val error = events
-                .filterIsInstance<app.cash.turbine.Event.Item<HomeUiState>>()
-                .map { it.value }
-                .filterIsInstance<HomeUiState.Error>()
-                .last()
+            testScheduler.runCurrent()
+            val error = awaitItem() as HomeUiState.Error
             assertEquals(ErrorKind.Network, error.kind)
         }
     }
@@ -212,10 +212,10 @@ class FakePlaceRepository : PlaceRepository {
 
 class FakeWeatherRepository : WeatherRepository {
     val snapshots = mutableMapOf<String, WeatherSnapshot>()
-    var refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit))
+    var refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit), Result.success(Unit))
 
     override fun observe(place: Place): Flow<WeatherSnapshot> {
-        return MutableStateFlow(snapshots[place.cacheKey()] ?: WeatherSnapshot(null, null))
+        return MutableStateFlow(snapshots[place.cacheKey()] ?: WeatherSnapshot(null, null, null))
     }
 
     override suspend fun refresh(place: Place): RefreshOutcome {

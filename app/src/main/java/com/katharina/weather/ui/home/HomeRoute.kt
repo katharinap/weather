@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun HomeRoute(
     onNavigateToPlaces: () -> Unit,
+    onNavigateToAlerts: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -44,6 +45,7 @@ fun HomeRoute(
         onRefresh = { viewModel.refresh(userInitiated = true) },
         onRetry = { viewModel.refresh(userInitiated = false) },
         onNavigateToPlaces = onNavigateToPlaces,
+        onNavigateToAlerts = onNavigateToAlerts,
         onUseCurrentLocation = {
             val hasPermission = ContextCompat.checkSelfPermission(
                 context,

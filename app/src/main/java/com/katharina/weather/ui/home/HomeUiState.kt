@@ -1,5 +1,6 @@
 package com.katharina.weather.ui.home
 
+import com.katharina.weather.domain.model.AlertsUiState
 import com.katharina.weather.domain.model.CurrentWeather
 import com.katharina.weather.domain.model.DailyForecast
 import com.katharina.weather.domain.model.HourlyForecast
@@ -19,6 +20,7 @@ sealed interface HomeUiState {
         val hours24: List<HourlyForecast> = emptyList(),
         val hours48: List<HourlyForecast> = emptyList(),
         val days: List<DailyForecast> = emptyList(),
+        val alertsUiState: AlertsUiState = AlertsUiState.Unknown,
         val isRefreshing: Boolean = false,
         val refreshFailed: Boolean = false,
         val isOutdated: Boolean = false,

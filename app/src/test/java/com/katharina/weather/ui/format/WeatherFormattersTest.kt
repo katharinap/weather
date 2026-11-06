@@ -34,31 +34,31 @@ class WeatherFormattersTest {
 
     @Test
     fun testGetWeatherIconRes() {
-        assertEquals(R.drawable.ic_weather_clear_day, getWeatherIconRes("sunny"))
-        assertEquals(R.drawable.ic_weather_clear_day, getWeatherIconRes("clear-day"))
-        assertEquals(R.drawable.ic_weather_clear_night, getWeatherIconRes("clear-night"))
-        assertEquals(R.drawable.ic_weather_cloudy, getWeatherIconRes("cloudy"))
-        assertEquals(R.drawable.ic_weather_rain, getWeatherIconRes("rain"))
-        assertEquals(R.drawable.ic_weather_unknown, getWeatherIconRes("unknown-icon"))
-        assertEquals(R.drawable.ic_weather_unknown, getWeatherIconRes(null))
+        assertEquals(R.drawable.ic_weather_fill_clear_day, getWeatherIconRes("sunny"))
+        assertEquals(R.drawable.ic_weather_fill_clear_day, getWeatherIconRes("clear-day"))
+        assertEquals(R.drawable.ic_weather_fill_clear_night, getWeatherIconRes("clear-night"))
+        assertEquals(R.drawable.ic_weather_fill_cloudy, getWeatherIconRes("cloudy"))
+        assertEquals(R.drawable.ic_weather_fill_rain, getWeatherIconRes("rain"))
+        assertEquals(R.drawable.ic_weather_fill_unknown, getWeatherIconRes("unknown-icon"))
+        assertEquals(R.drawable.ic_weather_fill_unknown, getWeatherIconRes(null))
     }
 
     @Test
-    fun `every WeatherCondition except UNKNOWN maps to a drawable different from UNKNOWN`() {
+    fun testEveryWeatherConditionExceptUnknownMapsToDrawableDifferentFromUnknown() {
         val unknownDrawable = getWeatherIconRes("unknown")
-        assertEquals(R.drawable.ic_weather_unknown, unknownDrawable)
+        assertEquals(R.drawable.ic_weather_fill_unknown, unknownDrawable)
 
-        WeatherCondition.values().filter { it != WeatherCondition.UNKNOWN }.forEach { condition ->
+        WeatherCondition.entries.filter { it != WeatherCondition.UNKNOWN }.forEach { condition ->
             val drawableFromName = getWeatherIconRes(condition.name)
             val drawableFromDayVariantName = getWeatherIconRes(condition.toDayVariant().name)
 
             assertNotEquals(
-                "Condition $condition (.name=${condition.name}) mapped to ic_weather_unknown",
+                "Condition $condition (.name=${condition.name}) mapped to ic_weather_fill_unknown",
                 unknownDrawable,
                 drawableFromName
             )
             assertNotEquals(
-                "Condition $condition (.toDayVariant().name=${condition.toDayVariant().name}) mapped to ic_weather_unknown",
+                "Condition $condition (.toDayVariant().name=${condition.toDayVariant().name}) mapped to ic_weather_fill_unknown",
                 unknownDrawable,
                 drawableFromDayVariantName
             )

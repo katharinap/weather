@@ -12,39 +12,43 @@ class StalenessTest {
 
     @Test
     fun testNeedsRefreshWhenSnapshotHasNulls() {
-        val emptySnapshot = WeatherSnapshot(null, null)
+        val emptySnapshot = WeatherSnapshot(null, null, null)
         assertTrue(Staleness.needsRefresh(emptySnapshot, now))
 
         val currentWeather = mockCurrentWeather()
-        val currentOnly = WeatherSnapshot(Cached(currentWeather, now), null)
+        val currentOnly = WeatherSnapshot(Cached(currentWeather, now), null, null)
         assertTrue(Staleness.needsRefresh(currentOnly, now))
 
-        val forecastOnly = WeatherSnapshot(null, Cached(emptyList(), now))
+        val forecastOnly = WeatherSnapshot(null, Cached(emptyList(), now), null)
         assertTrue(Staleness.needsRefresh(forecastOnly, now))
     }
 
     @Test
     fun testNeedsRefreshBoundaries() {
         val currentWeather = mockCurrentWeather()
+        val freshAlerts = Cached(AlertsResult(emptyList(), null), now.minus(Duration.ofMinutes(10)))
 
-        // Fresh: current 10 min old, forecast 30 min old -> false
+        // Fresh: current 10 min old, forecast 30 min old, alerts 10 min old -> false
         val freshSnapshot = WeatherSnapshot(
             current = Cached(currentWeather, now.minus(Duration.ofMinutes(10))),
-            forecast = Cached(emptyList(), now.minus(Duration.ofMinutes(30)))
+            forecast = Cached(emptyList(), now.minus(Duration.ofMinutes(30))),
+            alerts = freshAlerts
         )
         assertFalse(Staleness.needsRefresh(freshSnapshot, now))
 
         // Current weather > 15 min -> true
         val staleCurrent = WeatherSnapshot(
             current = Cached(currentWeather, now.minus(Duration.ofMinutes(16))),
-            forecast = Cached(emptyList(), now.minus(Duration.ofMinutes(30)))
+            forecast = Cached(emptyList(), now.minus(Duration.ofMinutes(30))),
+            alerts = freshAlerts
         )
         assertTrue(Staleness.needsRefresh(staleCurrent, now))
 
         // Forecast > 60 min -> true
         val staleForecast = WeatherSnapshot(
             current = Cached(currentWeather, now.minus(Duration.ofMinutes(10))),
-            forecast = Cached(emptyList(), now.minus(Duration.ofMinutes(61)))
+            forecast = Cached(emptyList(), now.minus(Duration.ofMinutes(61))),
+            alerts = freshAlerts
         )
         assertTrue(Staleness.needsRefresh(staleForecast, now))
     }

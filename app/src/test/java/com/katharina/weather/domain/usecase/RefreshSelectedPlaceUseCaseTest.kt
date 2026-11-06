@@ -60,7 +60,7 @@ class RefreshSelectedPlaceUseCaseTest {
         val place = Place(1L, "Garching", "Munich", "Germany", 48.248, 11.651)
         fakePlaceRepository.placesFlow.value = listOf(place)
         fakePlaceRepository.selectionFlow.value = PlaceSelection.Saved(1L)
-        fakeWeatherRepository.refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit))
+        fakeWeatherRepository.refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit), Result.success(Unit))
 
         val result = useCase()
 
@@ -75,7 +75,7 @@ class RefreshSelectedPlaceUseCaseTest {
     fun testCurrentLocationWithLastFixRefreshesSuccessfully() = runBlocking {
         fakePlaceRepository.selectionFlow.value = PlaceSelection.CurrentLocation
         fakeLocationDataStore.state.value = LastKnownLocationFix(48.137, 11.575, "Munich")
-        fakeWeatherRepository.refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit))
+        fakeWeatherRepository.refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit), Result.success(Unit))
 
         val result = useCase()
 
@@ -103,7 +103,8 @@ class RefreshSelectedPlaceUseCaseTest {
         fakePlaceRepository.selectionFlow.value = PlaceSelection.Saved(1L)
         fakeWeatherRepository.refreshOutcome = RefreshOutcome(
             current = Result.failure(IOException("Network error")),
-            forecast = Result.failure(IOException("Network error"))
+            forecast = Result.failure(IOException("Network error")),
+            alerts = Result.failure(IOException("Network error"))
         )
 
         val result = useCase()
@@ -119,7 +120,8 @@ class RefreshSelectedPlaceUseCaseTest {
         fakePlaceRepository.selectionFlow.value = PlaceSelection.Saved(1L)
         fakeWeatherRepository.refreshOutcome = RefreshOutcome(
             current = Result.failure(RuntimeException("HTTP 404 No sources match")),
-            forecast = Result.failure(RuntimeException("HTTP 404 No sources match"))
+            forecast = Result.failure(RuntimeException("HTTP 404 No sources match")),
+            alerts = Result.failure(RuntimeException("HTTP 404 No sources match"))
         )
 
         val result = useCase()
@@ -135,7 +137,8 @@ class RefreshSelectedPlaceUseCaseTest {
         fakePlaceRepository.selectionFlow.value = PlaceSelection.Saved(1L)
         fakeWeatherRepository.refreshOutcome = RefreshOutcome(
             current = Result.success(Unit),
-            forecast = Result.failure(IOException("Forecast error"))
+            forecast = Result.failure(IOException("Forecast error")),
+            alerts = Result.failure(IOException("Alerts error"))
         )
 
         val result = useCase()
@@ -168,11 +171,11 @@ class FakePlaceRepositoryForUseCase : PlaceRepository {
 }
 
 class FakeWeatherRepositoryForUseCase : WeatherRepository {
-    var refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit))
+    var refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit), Result.success(Unit))
     var refreshCallCount = 0
 
     override fun observe(place: Place): Flow<WeatherSnapshot> {
-        return MutableStateFlow(WeatherSnapshot(null, null))
+        return MutableStateFlow(WeatherSnapshot(null, null, null))
     }
 
     override suspend fun refresh(place: Place): RefreshOutcome {

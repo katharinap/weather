@@ -3,8 +3,10 @@ package com.katharina.weather.data.repository
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.data.local.WeatherCacheEntity
 import com.katharina.weather.data.remote.BrightSkyApi
+import com.katharina.weather.data.remote.dto.AlertsResponseDto
 import com.katharina.weather.data.remote.dto.CurrentWeatherResponseDto
 import com.katharina.weather.data.remote.dto.WeatherResponseDto
+import com.katharina.weather.data.remote.mapper.toAlertsResult
 import com.katharina.weather.data.remote.mapper.toCurrentWeather
 import com.katharina.weather.data.remote.mapper.toHourlyForecast
 import com.katharina.weather.domain.model.Cached
@@ -44,6 +46,7 @@ class WeatherRepositoryImpl @Inject constructor(
         return weatherCacheDao.observe(place.cacheKey()).map { entities ->
             val currentEntity = entities.find { it.kind == "current" }
             val forecastEntity = entities.find { it.kind == "forecast" }
+            val alertsEntity = entities.find { it.kind == "alerts" }
 
             val currentCached = currentEntity?.let { entity ->
                 if (entity.formatVersion != CACHE_FORMAT_VERSION) null
@@ -72,7 +75,20 @@ class WeatherRepositoryImpl @Inject constructor(
                 }
             }
 
-            WeatherSnapshot(current = currentCached, forecast = forecastCached)
+            val alertsCached = alertsEntity?.let { entity ->
+                if (entity.formatVersion != CACHE_FORMAT_VERSION) null
+                else {
+                    try {
+                        val dto = json.decodeFromString<AlertsResponseDto>(entity.payload)
+                        val alertsResult = dto.toAlertsResult()
+                        Cached(alertsResult, Instant.ofEpochMilli(entity.fetchedAt))
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            }
+
+            WeatherSnapshot(current = currentCached, forecast = forecastCached, alerts = alertsCached)
         }
     }
 
@@ -81,7 +97,7 @@ class WeatherRepositoryImpl @Inject constructor(
         val startDate = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val lastDate = today.plusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE)
 
-        val (currentRes, forecastRes) = coroutineScope {
+        val (currentRes, forecastRes, alertsRes) = coroutineScope {
             val c = async {
                 try {
                     val dto = api.currentWeather(place.latitude, place.longitude)
@@ -100,7 +116,16 @@ class WeatherRepositoryImpl @Inject constructor(
                     Result.failure(e)
                 }
             }
-            c.await() to f.await()
+            val a = async {
+                try {
+                    val dto = api.alerts(place.latitude, place.longitude)
+                    Result.success(dto)
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    Result.failure(e)
+                }
+            }
+            Triple(c.await(), f.await(), a.await())
         }
 
         val nowEpoch = clock.millis()
@@ -149,6 +174,28 @@ class WeatherRepositoryImpl @Inject constructor(
             onFailure = { Result.failure(it) }
         )
 
-        return RefreshOutcome(current = currentResult, forecast = forecastResult)
+        val alertsResult = alertsRes.fold(
+            onSuccess = { dto ->
+                try {
+                    val payload = json.encodeToString(dto)
+                    val entity = WeatherCacheEntity(
+                        placeKey = place.cacheKey(),
+                        kind = "alerts",
+                        fetchedAt = nowEpoch,
+                        formatVersion = CACHE_FORMAT_VERSION,
+                        latitude = place.latitude,
+                        longitude = place.longitude,
+                        payload = payload
+                    )
+                    weatherCacheDao.upsert(entity)
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+            },
+            onFailure = { Result.failure(it) }
+        )
+
+        return RefreshOutcome(current = currentResult, forecast = forecastResult, alerts = alertsResult)
     }
 }

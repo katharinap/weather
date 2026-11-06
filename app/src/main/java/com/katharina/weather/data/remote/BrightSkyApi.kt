@@ -1,5 +1,6 @@
 package com.katharina.weather.data.remote
 
+import com.katharina.weather.data.remote.dto.AlertsResponseDto
 import com.katharina.weather.data.remote.dto.CurrentWeatherResponseDto
 import com.katharina.weather.data.remote.dto.WeatherResponseDto
 import retrofit2.http.GET
@@ -21,4 +22,11 @@ interface BrightSkyApi {
         @Query("last_date") lastDate: String,
         @Query("tz") tz: String? = null
     ): WeatherResponseDto
+
+    @GET("alerts")
+    suspend fun alerts(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
+        @Query("tz") tz: String = "Europe/Berlin"
+    ): AlertsResponseDto
 }

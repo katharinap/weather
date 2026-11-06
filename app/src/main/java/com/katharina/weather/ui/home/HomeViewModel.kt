@@ -162,6 +162,20 @@ class HomeViewModel @Inject constructor(
         val isOutdated = Staleness.isOutdated(snapshot, now)
         val outdatedHours = Duration.between(updatedAt, now).toHours()
 
+        val alertsUiState = if (snapshot.alerts == null) {
+            AlertsUiState.Unknown
+        } else {
+            val result = snapshot.alerts.value
+            val visible = result.alerts.visibleAt(now)
+            val isStale = Staleness.isAlertsStale(snapshot, now)
+            AlertsUiState.Known(
+                visible = visible,
+                area = result.area,
+                checkedAt = snapshot.alerts.fetchedAt,
+                isStale = isStale
+            )
+        }
+
         val isRefreshing = refreshState is RefreshState.Refreshing
         val refreshFailed = refreshState is RefreshState.Failed
 
@@ -187,6 +201,7 @@ class HomeViewModel @Inject constructor(
             hours24 = hours24,
             hours48 = hours48,
             days = days,
+            alertsUiState = alertsUiState,
             isRefreshing = isRefreshing,
             refreshFailed = refreshFailed,
             isOutdated = isOutdated,

@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -25,11 +27,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.katharina.weather.R
+import com.katharina.weather.domain.model.AlertsUiState
 import com.katharina.weather.domain.model.CurrentWeather
 import com.katharina.weather.domain.model.DailyForecast
 import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.model.Place
+import com.katharina.weather.domain.model.WeatherAlert
 import com.katharina.weather.domain.model.WeatherCondition
+import com.katharina.weather.ui.alerts.formatValidity
 import com.katharina.weather.ui.debug.triggerDebugWorker
 import com.katharina.weather.ui.format.formatObservationTime
 import com.katharina.weather.ui.format.formatRelativeTime
@@ -37,7 +42,9 @@ import com.katharina.weather.ui.format.getWeatherIconRes
 import com.katharina.weather.ui.format.toNameStringRes
 import com.katharina.weather.ui.home.chart.HourlyChart
 import com.katharina.weather.ui.theme.WeatherTheme
+import com.katharina.weather.ui.util.getStyle
 import com.katharina.weather.ui.util.toWindDirectionStringRes
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -53,6 +60,7 @@ fun HomeScreen(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onNavigateToPlaces: () -> Unit,
+    onNavigateToAlerts: () -> Unit,
     onUseCurrentLocation: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
@@ -112,7 +120,7 @@ fun HomeScreen(
                         onRefresh = onRefresh,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        SuccessContent(state = state)
+                        SuccessContent(state = state, onNavigateToAlerts = onNavigateToAlerts)
                     }
                 }
             }
@@ -198,6 +206,7 @@ fun ErrorContent(kind: ErrorKind, onRetry: () -> Unit, modifier: Modifier = Modi
 @Composable
 fun SuccessContent(
     state: HomeUiState.Success,
+    onNavigateToAlerts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val weather = state.weather
@@ -256,6 +265,18 @@ fun SuccessContent(
                     textAlign = TextAlign.Center
                 )
             }
+        }
+
+        // Active Weather Alert Banner
+        val alertsState = state.alertsUiState
+        if (alertsState is AlertsUiState.Known && alertsState.visible.active.isNotEmpty()) {
+            val topAlert = alertsState.visible.active.first()
+            val extraCount = alertsState.visible.active.size - 1
+            AlertBanner(
+                alert = topAlert,
+                extraCount = extraCount,
+                onClick = onNavigateToAlerts
+            )
         }
 
         // Main Weather Header
@@ -390,7 +411,7 @@ fun SuccessContent(
             }
         }
 
-        // Footer Metadata
+        // Footer Metadata & Warnings Line
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -410,6 +431,34 @@ fun SuccessContent(
                 }
             )
 
+            // Warnings Footer Line
+            val warningsText = when (alertsState) {
+                is AlertsUiState.Unknown -> "Warnings: unavailable"
+                is AlertsUiState.Known -> {
+                    val checkedStr = formatRelativeTime(alertsState.checkedAt, now)
+                    if (alertsState.isStale) {
+                        val hoursAgo = Duration.between(alertsState.checkedAt, now).toHours()
+                        "Warnings: not checked recently ($hoursAgo h ago)"
+                    } else {
+                        val activeCount = alertsState.visible.active.size
+                        val upcomingCount = alertsState.visible.upcoming.size
+                        when {
+                            activeCount == 0 && upcomingCount == 0 -> "Warnings: none · checked $checkedStr"
+                            activeCount == 0 && upcomingCount > 0 -> "Warnings: none active, $upcomingCount upcoming · checked $checkedStr"
+                            else -> "Warnings: $activeCount active · checked $checkedStr"
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = warningsText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(onClick = onNavigateToAlerts)
+            )
+
             val stationName = weather.stationName ?: "–"
             val distanceKm = (weather.stationDistance ?: 0.0) / 1000.0
             Text(
@@ -423,11 +472,96 @@ fun SuccessContent(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
-            Text(
-                text = stringResource(R.string.attribution_meteocons),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
+        }
+    }
+}
+
+@Composable
+fun AlertBanner(
+    alert: WeatherAlert,
+    extraCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val style = alert.severity.getStyle()
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // Severity Color Bar
+            Box(
+                modifier = Modifier
+                    .width(8.dp)
+                    .fillMaxHeight()
+                    .background(style.color)
             )
+
+            Column(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = style.iconRes),
+                            contentDescription = null,
+                            tint = style.color,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = alert.event,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = style.color
+                        )
+                    }
+
+                    if (extraCount > 0) {
+                        Surface(
+                            color = style.containerColor,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "+$extraCount more",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = style.onContainerColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (!alert.headline.isNullOrBlank()) {
+                    Text(
+                        text = alert.headline,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                val validityStr = formatValidity(alert.onset, alert.expires)
+                if (validityStr.isNotEmpty()) {
+                    Text(
+                        text = validityStr,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -651,6 +785,7 @@ fun HomeScreenOfflineBannerPreview() {
             onRefresh = {},
             onRetry = {},
             onNavigateToPlaces = {},
+            onNavigateToAlerts = {},
             onUseCurrentLocation = {},
             snackbarHostState = SnackbarHostState()
         )
@@ -688,6 +823,7 @@ fun HomeScreenErrorBannerPreview() {
             onRefresh = {},
             onRetry = {},
             onNavigateToPlaces = {},
+            onNavigateToAlerts = {},
             onUseCurrentLocation = {},
             snackbarHostState = SnackbarHostState()
         )
