@@ -4,9 +4,11 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -16,8 +18,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -34,8 +39,8 @@ import com.katharina.weather.domain.model.HourlyForecast
 import com.katharina.weather.domain.model.Place
 import com.katharina.weather.domain.model.WeatherAlert
 import com.katharina.weather.domain.model.WeatherCondition
-import com.katharina.weather.ui.alerts.formatValidity
 import com.katharina.weather.ui.debug.triggerDebugWorker
+import com.katharina.weather.ui.format.formatAlertValidity
 import com.katharina.weather.ui.format.formatObservationTime
 import com.katharina.weather.ui.format.formatRelativeTime
 import com.katharina.weather.ui.format.getWeatherIconRes
@@ -44,7 +49,6 @@ import com.katharina.weather.ui.home.chart.HourlyChart
 import com.katharina.weather.ui.theme.WeatherTheme
 import com.katharina.weather.ui.util.getStyle
 import com.katharina.weather.ui.util.toWindDirectionStringRes
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -65,33 +69,43 @@ fun HomeScreen(
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
+    val isScrolled = remember { derivedStateOf { scrollState.value > 0 } }.value
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                title = {
-                    val titleText = when (state) {
-                        is HomeUiState.Success -> state.place.name
-                        is HomeUiState.Error -> state.place?.name ?: stringResource(R.string.app_name)
-                        else -> stringResource(R.string.app_name)
-                    }
-                    Text(text = titleText)
-                },
-                actions = {
-                    FilledTonalIconButton(
-                        onClick = onNavigateToPlaces,
-                        modifier = Modifier.padding(end = 4.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_location_on),
-                            contentDescription = stringResource(R.string.title_places)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+            Column {
+                TopAppBar(
+                    title = {
+                        val titleText = when (state) {
+                            is HomeUiState.Success -> state.place.name
+                            is HomeUiState.Error -> state.place?.name ?: stringResource(R.string.app_name)
+                            else -> stringResource(R.string.app_name)
+                        }
+                        Text(text = titleText)
+                    },
+                    actions = {
+                        FilledTonalIconButton(
+                            onClick = onNavigateToPlaces,
+                            modifier = Modifier.padding(end = 4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_location_on),
+                                contentDescription = stringResource(R.string.title_places)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = if (isScrolled) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.background
+                    )
                 )
-            )
+                if (isScrolled) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
@@ -120,7 +134,11 @@ fun HomeScreen(
                         onRefresh = onRefresh,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        SuccessContent(state = state, onNavigateToAlerts = onNavigateToAlerts)
+                        SuccessContent(
+                            state = state,
+                            onNavigateToAlerts = onNavigateToAlerts,
+                            scrollState = scrollState
+                        )
                     }
                 }
             }
@@ -207,7 +225,8 @@ fun ErrorContent(kind: ErrorKind, onRetry: () -> Unit, modifier: Modifier = Modi
 fun SuccessContent(
     state: HomeUiState.Success,
     onNavigateToAlerts: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scrollState: ScrollState = rememberScrollState()
 ) {
     val weather = state.weather
     val now = Instant.now()
@@ -216,7 +235,7 @@ fun SuccessContent(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -437,8 +456,7 @@ fun SuccessContent(
                 is AlertsUiState.Known -> {
                     val checkedStr = formatRelativeTime(alertsState.checkedAt, now)
                     if (alertsState.isStale) {
-                        val hoursAgo = Duration.between(alertsState.checkedAt, now).toHours()
-                        "Warnings: not checked recently ($hoursAgo h ago)"
+                        "Warnings: not checked recently ($checkedStr)"
                     } else {
                         val activeCount = alertsState.visible.active.size
                         val upcomingCount = alertsState.visible.upcoming.size
@@ -483,28 +501,32 @@ fun AlertBanner(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val style = alert.severity.getStyle()
+    val isDark = isSystemInDarkTheme()
+    val style = alert.severity.getStyle(isDark)
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        colors = CardDefaults.cardColors(
+            containerColor = style.containerColor,
+            contentColor = style.onContainerColor
+        )
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
-            // Severity Color Bar
+            // Severity Color Indicator Bar
             Box(
                 modifier = Modifier
-                    .width(8.dp)
+                    .width(6.dp)
                     .fillMaxHeight()
                     .background(style.color)
             )
 
             Column(
                 modifier = Modifier
-                    .padding(12.dp)
+                    .padding(14.dp)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -513,33 +535,35 @@ fun AlertBanner(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
                         Icon(
                             painter = painterResource(id = style.iconRes),
                             contentDescription = null,
                             tint = style.color,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = alert.event,
+                            text = "${style.label} · ${alert.event}",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = style.color
+                            color = style.onContainerColor
                         )
                     }
 
                     if (extraCount > 0) {
                         Surface(
-                            color = style.containerColor,
+                            color = style.color,
+                            contentColor = Color.White,
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
                                 text = "+$extraCount more",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = style.onContainerColor,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
@@ -549,16 +573,17 @@ fun AlertBanner(
                     Text(
                         text = alert.headline,
                         style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = style.onContainerColor
                     )
                 }
 
-                val validityStr = formatValidity(alert.onset, alert.expires)
+                val validityStr = formatAlertValidity(alert.onset, alert.expires)
                 if (validityStr.isNotEmpty()) {
                     Text(
                         text = validityStr,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = style.onContainerColor.copy(alpha = 0.85f)
                     )
                 }
             }

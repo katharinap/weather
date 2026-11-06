@@ -2,6 +2,7 @@ package com.katharina.weather.ui.home.chart
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -9,8 +10,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.res.stringResource
@@ -38,6 +41,7 @@ fun HourlyChart(
     val chartHours = hours.take(48)
     if (chartHours.isEmpty()) return
 
+    val isDark = isSystemInDarkTheme()
     val temps = chartHours.mapNotNull { it.temperature }
     val minTemp = if (temps.isNotEmpty()) temps.minOrNull()!! - 1.0 else 0.0
     val maxTemp = if (temps.isNotEmpty()) temps.maxOrNull()!! + 1.0 else 10.0
@@ -56,9 +60,19 @@ fun HourlyChart(
     ) + ": " + (if (temps.isNotEmpty()) "${temps.minOrNull()!!.toInt()} to ${temps.maxOrNull()!!.toInt()}°" else "–") + ", $rainDescription"
 
     val lineColor = MaterialTheme.colorScheme.primary
-    val barColor = MaterialTheme.colorScheme.tertiary
+    val barColor = if (isDark) Color(0xFF4FC3F7) else Color(0xFF0288D1)
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
+    val dayLabelColor = MaterialTheme.colorScheme.primary
+    val gridColor = if (isDark) {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
+    }
+    val midnightGridColor = if (isDark) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+    } else {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+    }
 
     Card(
         modifier = modifier
@@ -83,7 +97,7 @@ fun HourlyChart(
                     fontWeight = FontWeight.Bold
                 )
 
-                // Small Precipitation Legend
+                // Small Blue Precipitation Legend
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -104,14 +118,14 @@ fun HourlyChart(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
+                    .height(145.dp)
             ) {
                 val width = size.width
                 val height = size.height
                 val paddingLeft = 32.dp.toPx()
                 val paddingRight = 16.dp.toPx()
                 val paddingTop = 16.dp.toPx()
-                val paddingBottom = 24.dp.toPx()
+                val paddingBottom = 34.dp.toPx()
 
                 val graphWidth = width - paddingLeft - paddingRight
                 val graphHeight = height - paddingTop - paddingBottom
@@ -120,7 +134,71 @@ fun HourlyChart(
 
                 val stepX = graphWidth / (chartHours.size - 1)
 
-                // 1. Draw Precipitation Bars at the bottom
+                // 1. Draw Grid Lines FIRST at fixed local hours (00, 06, 12, 18)
+                val timePaint = android.graphics.Paint().apply {
+                    color = labelColor.hashCode()
+                    textSize = 10.dp.toPx()
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+
+                val dayPaint = android.graphics.Paint().apply {
+                    color = dayLabelColor.hashCode()
+                    textSize = 10.dp.toPx()
+                    isFakeBoldText = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+
+                val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+                    .withZone(ZoneId.of("Europe/Berlin"))
+
+                chartHours.forEachIndexed { i, hour ->
+                    val zdt = hour.timestamp.atZone(ZoneId.of("Europe/Berlin"))
+                    val hourOfDay = zdt.hour
+                    val isFixedHour = hourOfDay == 0 || hourOfDay == 6 || hourOfDay == 12 || hourOfDay == 18
+
+                    if (isFixedHour) {
+                        val x = paddingLeft + i * stepX
+                        val isMidnight = hourOfDay == 0
+
+                        if (isMidnight) {
+                            val dayStr = zdt.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                            // Draw Weekday label on upper line
+                            drawContext.canvas.nativeCanvas.drawText(
+                                dayStr,
+                                x,
+                                height - 18.dp.toPx(),
+                                dayPaint
+                            )
+                            // Draw vertical midnight accent grid line
+                            drawLine(
+                                color = midnightGridColor,
+                                start = Offset(x, paddingTop),
+                                end = Offset(x, paddingTop + graphHeight),
+                                strokeWidth = 1.5.dp.toPx()
+                            )
+                        } else {
+                            val timeStr = timeFormatter.format(hour.timestamp)
+                            // Draw time label on lower line
+                            drawContext.canvas.nativeCanvas.drawText(
+                                timeStr,
+                                x,
+                                height - 4.dp.toPx(),
+                                timePaint
+                            )
+                            // Regular grid line
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(x, paddingTop),
+                                end = Offset(x, paddingTop + graphHeight),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+                    }
+                }
+
+                // 2. Draw Precipitation Bars (over grid lines)
                 val maxBarHeight = graphHeight * 0.4f
                 val barWidth = (stepX * 0.6f).coerceAtLeast(2f)
 
@@ -138,7 +216,7 @@ fun HourlyChart(
                     }
                 }
 
-                // 2. Draw Temperature Line (leaving gaps for nulls)
+                // 3. Draw Temperature Line as a single Path (over grid lines and bars)
                 val path = Path()
                 var inPath = false
 
@@ -162,45 +240,12 @@ fun HourlyChart(
                 drawPath(
                     path = path,
                     color = lineColor,
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                    style = Stroke(
+                        width = 3.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
                 )
-
-                // 3. Draw X-axis Time Labels every 6 hours (Midnight shows Weekday name)
-                val textPaint = android.graphics.Paint().apply {
-                    color = labelColor.hashCode()
-                    textSize = 10.dp.toPx()
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    isAntiAlias = true
-                }
-
-                val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
-                    .withZone(ZoneId.of("Europe/Berlin"))
-
-                chartHours.forEachIndexed { i, hour ->
-                    if (i % 6 == 0) {
-                        val x = paddingLeft + i * stepX
-                        val zdt = hour.timestamp.atZone(ZoneId.of("Europe/Berlin"))
-                        val timeStr = if (zdt.hour == 0) {
-                            zdt.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-                        } else {
-                            timeFormatter.format(hour.timestamp)
-                        }
-
-                        drawContext.canvas.nativeCanvas.drawText(
-                            timeStr,
-                            x,
-                            height - 4.dp.toPx(),
-                            textPaint
-                        )
-                        // Grid line
-                        drawLine(
-                            color = gridColor,
-                            start = Offset(x, paddingTop),
-                            end = Offset(x, paddingTop + graphHeight),
-                            strokeWidth = 1.dp.toPx()
-                        )
-                    }
-                }
 
                 // 4. Y-axis Temp Labels (min and max)
                 if (temps.isNotEmpty()) {

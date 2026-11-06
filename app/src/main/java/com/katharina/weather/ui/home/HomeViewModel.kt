@@ -128,8 +128,8 @@ class HomeViewModel @Inject constructor(
             weatherRepository.observe(place),
             tickerFlow.onStart { emit(Instant.now()) },
             _refreshState
-        ) { snapshot, now, refreshState ->
-            buildUiState(place, snapshot, now, refreshState)
+        ) { snapshot, _, refreshState ->
+            buildUiState(place, snapshot, Instant.now(), refreshState)
         }
     }
 

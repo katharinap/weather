@@ -1,7 +1,7 @@
 package com.katharina.weather.ui.alerts
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,12 +20,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.katharina.weather.R
 import com.katharina.weather.domain.model.*
+import com.katharina.weather.ui.format.formatAlertValidity
 import com.katharina.weather.ui.format.formatRelativeTime
 import com.katharina.weather.ui.theme.WeatherTheme
 import com.katharina.weather.ui.util.getStyle
 import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,15 +76,7 @@ fun AlertsScreen(
                     )
                 }
                 is AlertsUiState.Known -> {
-                    if (state.isStale && state.visible.active.isEmpty() && state.visible.upcoming.isEmpty()) {
-                        AlertsErrorContent(
-                            message = "Warnings could not be checked recently",
-                            onRetry = onRefresh,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    } else {
-                        AlertsKnownContent(state = state)
-                    }
+                    AlertsKnownContent(state = state)
                 }
             }
         }
@@ -125,6 +116,25 @@ fun AlertsKnownContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Stale Notice Banner at the top
+        if (state.isStale) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "Warnings could not be checked recently. They may be out of date.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(12.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
         // Area & Metadata Header
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -147,7 +157,7 @@ fun AlertsKnownContent(
         if (state.visible.active.isNotEmpty()) {
             item {
                 Text(
-                    text = "Active Warnings (${state.visible.active.size})",
+                    text = "Active warnings (${state.visible.active.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -162,7 +172,7 @@ fun AlertsKnownContent(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Upcoming Warnings (${state.visible.upcoming.size})",
+                    text = "Upcoming warnings (${state.visible.upcoming.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -207,7 +217,8 @@ fun AlertsKnownContent(
 
 @Composable
 fun AlertCard(alert: WeatherAlert, modifier: Modifier = Modifier) {
-    val style = alert.severity.getStyle()
+    val isDark = isSystemInDarkTheme()
+    val style = alert.severity.getStyle(isDark)
     var expanded by remember { mutableStateOf(false) }
 
     Card(
@@ -275,7 +286,7 @@ fun AlertCard(alert: WeatherAlert, modifier: Modifier = Modifier) {
                 }
 
                 // Validity Range
-                val validityStr = formatValidity(alert.onset, alert.expires)
+                val validityStr = formatAlertValidity(alert.onset, alert.expires)
                 if (validityStr.isNotEmpty()) {
                     Text(
                         text = validityStr,
@@ -326,19 +337,6 @@ fun AlertCard(alert: WeatherAlert, modifier: Modifier = Modifier) {
                 }
             }
         }
-    }
-}
-
-fun formatValidity(onset: Instant?, expires: Instant?): String {
-    val formatter = DateTimeFormatter.ofPattern("d MMM, HH:mm").withZone(ZoneId.of("Europe/Berlin"))
-    val onsetStr = onset?.let { formatter.format(it) }
-    val expStr = expires?.let { formatter.format(it) }
-
-    return when {
-        onsetStr != null && expStr != null -> "Valid: $onsetStr – $expStr"
-        expStr != null -> "Valid until $expStr"
-        onsetStr != null -> "Valid from $onsetStr"
-        else -> ""
     }
 }
 
@@ -453,7 +451,12 @@ fun AlertsScreenStalePreview() {
     WeatherTheme {
         AlertsScreen(
             state = AlertsUiState.Known(
-                visible = VisibleAlerts(active = emptyList(), upcoming = emptyList()),
+                visible = VisibleAlerts(
+                    active = listOf(
+                        WeatherAlert("1", 99, "Thunderstorm", "Severe Thunderstorm Warning", "Heavy rain and hail expected.", "Stay indoors.", AlertSeverity.SEVERE, Instant.now(), Instant.now(), Instant.now().plusSeconds(7200))
+                    ),
+                    upcoming = emptyList()
+                ),
                 area = AlertArea("Frankfurt-Nord", "Frankfurt am Main", "Hessen"),
                 checkedAt = Instant.now().minusSeconds(7200),
                 isStale = true

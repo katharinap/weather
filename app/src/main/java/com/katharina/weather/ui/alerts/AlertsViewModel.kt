@@ -2,6 +2,7 @@ package com.katharina.weather.ui.alerts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.katharina.weather.data.local.LocationDataStore
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.domain.model.*
 import com.katharina.weather.domain.repository.PlaceRepository
@@ -20,6 +21,7 @@ import javax.inject.Inject
 class AlertsViewModel @Inject constructor(
     private val placeRepository: PlaceRepository,
     private val weatherRepository: WeatherRepository,
+    private val locationDataStore: LocationDataStore,
     private val weatherCacheDao: WeatherCacheDao
 ) : ViewModel() {
 
@@ -43,11 +45,23 @@ class AlertsViewModel @Inject constructor(
                     flowOf(AlertsUiState.Unknown)
                 }
                 is PlaceSelection.CurrentLocation -> {
-                    // For current location, resolve place or observe
-                    placeRepository.savedPlaces.flatMapLatest { saved ->
-                        val place = saved.find { it.isCurrentLocation } ?: Place(CURRENT_LOCATION_ID, "Current location", null, null, 52.52, 13.405, true)
-                        currentPlace = place
-                        observeAlerts(place)
+                    locationDataStore.lastLocation.flatMapLatest { lastFix ->
+                        if (lastFix == null) {
+                            currentPlace = null
+                            flowOf(AlertsUiState.Unknown)
+                        } else {
+                            val place = Place(
+                                id = CURRENT_LOCATION_ID,
+                                name = lastFix.name,
+                                region = null,
+                                country = null,
+                                latitude = lastFix.latitude,
+                                longitude = lastFix.longitude,
+                                isCurrentLocation = true
+                            )
+                            currentPlace = place
+                            observeAlerts(place)
+                        }
                     }
                 }
                 is PlaceSelection.Saved -> {
@@ -74,7 +88,8 @@ class AlertsViewModel @Inject constructor(
         return combine(
             weatherRepository.observe(place),
             tickerFlow.onStart { emit(Instant.now()) }
-        ) { snapshot, now ->
+        ) { snapshot, _ ->
+            val now = Instant.now()
             if (snapshot.alerts == null) {
                 AlertsUiState.Unknown
             } else {
