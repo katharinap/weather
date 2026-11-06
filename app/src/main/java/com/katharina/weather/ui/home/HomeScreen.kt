@@ -88,7 +88,7 @@ fun HomeScreen(
                     actions = {
                         FilledTonalIconButton(
                             onClick = onNavigateToPlaces,
-                            modifier = Modifier.padding(end = 4.dp)
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_location_on),
