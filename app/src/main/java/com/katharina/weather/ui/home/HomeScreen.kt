@@ -49,6 +49,7 @@ import com.katharina.weather.ui.home.chart.HourlyChart
 import com.katharina.weather.ui.theme.WeatherTheme
 import com.katharina.weather.ui.util.getStyle
 import com.katharina.weather.ui.util.toWindDirectionStringRes
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -88,7 +89,7 @@ fun HomeScreen(
                     actions = {
                         FilledTonalIconButton(
                             onClick = onNavigateToPlaces,
-                            modifier = Modifier.padding(end = 8.dp)
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_location_on),
@@ -487,6 +488,11 @@ fun SuccessContent(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.attribution_dwd),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Text(
+                text = stringResource(R.string.attribution_icons),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )

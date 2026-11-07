@@ -118,14 +118,14 @@ fun HourlyChart(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(145.dp)
+                    .height(140.dp)
             ) {
                 val width = size.width
                 val height = size.height
                 val paddingLeft = 32.dp.toPx()
                 val paddingRight = 16.dp.toPx()
                 val paddingTop = 16.dp.toPx()
-                val paddingBottom = 34.dp.toPx()
+                val paddingBottom = 22.dp.toPx()
 
                 val graphWidth = width - paddingLeft - paddingRight
                 val graphHeight = height - paddingTop - paddingBottom
@@ -164,11 +164,11 @@ fun HourlyChart(
 
                         if (isMidnight) {
                             val dayStr = zdt.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
-                            // Draw Weekday label on upper line
+                            // Draw Weekday label aligned on the single x-axis baseline
                             drawContext.canvas.nativeCanvas.drawText(
                                 dayStr,
                                 x,
-                                height - 18.dp.toPx(),
+                                height - 4.dp.toPx(),
                                 dayPaint
                             )
                             // Draw vertical midnight accent grid line
@@ -180,7 +180,7 @@ fun HourlyChart(
                             )
                         } else {
                             val timeStr = timeFormatter.format(hour.timestamp)
-                            // Draw time label on lower line
+                            // Draw time label on the same x-axis baseline
                             drawContext.canvas.nativeCanvas.drawText(
                                 timeStr,
                                 x,
