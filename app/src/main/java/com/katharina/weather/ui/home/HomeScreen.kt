@@ -698,7 +698,7 @@ fun DailyRow(day: DailyForecast) {
             text = dayLabel,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.width(76.dp)
+            modifier = Modifier.width(72.dp)
         )
 
         Box(
@@ -714,7 +714,7 @@ fun DailyRow(day: DailyForecast) {
         }
 
         Box(
-            modifier = Modifier.width(84.dp),
+            modifier = Modifier.width(88.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val prob = day.maxPrecipProbabilityPercent
