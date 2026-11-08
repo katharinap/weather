@@ -1,10 +1,17 @@
 package com.katharina.weather.ui.debug
 
+import com.katharina.weather.data.local.SeenAlertDao
+import com.katharina.weather.data.local.SeenAlertEntity
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.data.local.WeatherCacheEntity
 import com.katharina.weather.data.remote.dto.AlertDto
 import com.katharina.weather.data.remote.dto.AlertLocationDto
 import com.katharina.weather.data.remote.dto.AlertsResponseDto
+import com.katharina.weather.domain.model.AlertSeverity
+import com.katharina.weather.domain.model.Place
+import com.katharina.weather.domain.model.WeatherAlert
+import com.katharina.weather.domain.model.cacheKey
+import com.katharina.weather.domain.notification.AlertNotifier
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.time.Duration
@@ -84,4 +91,38 @@ suspend fun insertTestAlert(
             payload = payload
         )
     )
+}
+
+suspend fun postTestNotification(
+    place: Place,
+    alertNotifier: AlertNotifier,
+    seenAlertDao: SeenAlertDao
+) {
+    val now = Instant.now()
+    val timestamp = System.currentTimeMillis()
+    val alert = WeatherAlert(
+        id = "debug-notification-$timestamp",
+        eventCode = 99,
+        event = "Thunderstorm",
+        headline = "Test SEVERE Warning Notification",
+        description = "Synthetic test warning notification posted for debugging.",
+        instruction = "Tap to open Warnings screen.",
+        severity = AlertSeverity.SEVERE,
+        effective = now,
+        onset = now.minus(Duration.ofMinutes(1)),
+        expires = now.plus(Duration.ofHours(2))
+    )
+
+    alertNotifier.postNotification(place, alert)
+
+    val entity = SeenAlertEntity(
+        alertId = alert.id,
+        placeKey = place.cacheKey(),
+        eventKey = "99",
+        severity = "severe",
+        firstSeenAt = timestamp,
+        expiresAt = alert.expires?.toEpochMilli(),
+        notified = true
+    )
+    seenAlertDao.upsert(entity)
 }

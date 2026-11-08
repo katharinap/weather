@@ -1,12 +1,19 @@
 package com.katharina.weather.domain.usecase
 
+import android.content.Context
 import com.katharina.weather.data.local.LastKnownLocationFix
 import com.katharina.weather.data.local.LocationDataStore
+import com.katharina.weather.data.local.NotificationDataStore
+import com.katharina.weather.data.local.SeenAlertDao
+import com.katharina.weather.data.local.SeenAlertEntity
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.domain.model.*
+import com.katharina.weather.domain.notification.AlertNotifier
+import com.katharina.weather.domain.notification.PermissionChecker
 import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +31,12 @@ class RefreshSelectedPlaceUseCaseTest {
     private lateinit var fakePlaceRepository: FakePlaceRepositoryForUseCase
     private lateinit var fakeWeatherRepository: FakeWeatherRepositoryForUseCase
     private lateinit var fakeLocationDataStore: FakeLocationDataStoreForUseCase
+    private lateinit var fakeNotificationDataStore: FakeNotificationDataStoreForUseCase
     private lateinit var mockDao: WeatherCacheDao
+    private lateinit var fakeSeenAlertDao: FakeSeenAlertDao
+    private lateinit var mockNotifier: AlertNotifier
+    private lateinit var mockPermissionChecker: PermissionChecker
+    private lateinit var mockContext: Context
     private val clock = Clock.fixed(Instant.parse("2026-10-30T14:00:00Z"), ZoneId.of("UTC"))
     private lateinit var useCase: RefreshSelectedPlaceUseCase
 
@@ -33,13 +45,25 @@ class RefreshSelectedPlaceUseCaseTest {
         fakePlaceRepository = FakePlaceRepositoryForUseCase()
         fakeWeatherRepository = FakeWeatherRepositoryForUseCase()
         fakeLocationDataStore = FakeLocationDataStoreForUseCase()
+        fakeNotificationDataStore = FakeNotificationDataStoreForUseCase()
         mockDao = mockk(relaxed = true)
+        fakeSeenAlertDao = FakeSeenAlertDao()
+        mockNotifier = mockk(relaxed = true)
+        mockPermissionChecker = mockk {
+            every { hasNotificationPermission(any()) } returns true
+        }
+        mockContext = mockk(relaxed = true)
 
         useCase = RefreshSelectedPlaceUseCase(
             fakePlaceRepository,
             fakeWeatherRepository,
             fakeLocationDataStore,
+            fakeNotificationDataStore,
             mockDao,
+            fakeSeenAlertDao,
+            mockNotifier,
+            mockPermissionChecker,
+            mockContext,
             clock
         )
     }
@@ -131,20 +155,49 @@ class RefreshSelectedPlaceUseCaseTest {
     }
 
     @Test
-    fun testPartialSuccessReturnsDone() = runBlocking {
+    fun testNotificationStepNotifiesOnceAndNotOnSecondRun() = runBlocking {
         val place = Place(1L, "Garching", "Munich", "Germany", 48.248, 11.651)
         fakePlaceRepository.placesFlow.value = listOf(place)
         fakePlaceRepository.selectionFlow.value = PlaceSelection.Saved(1L)
-        fakeWeatherRepository.refreshOutcome = RefreshOutcome(
-            current = Result.success(Unit),
-            forecast = Result.failure(IOException("Forecast error")),
-            alerts = Result.failure(IOException("Alerts error"))
+        fakeNotificationDataStore.enabledState.value = true
+
+        val severeAlert = WeatherAlert(
+            id = "alert-severe-1",
+            eventCode = 99,
+            event = "Thunderstorm",
+            headline = "Severe Thunderstorm",
+            description = null,
+            instruction = null,
+            severity = AlertSeverity.SEVERE,
+            effective = null,
+            onset = clock.instant().minusSeconds(100),
+            expires = clock.instant().plusSeconds(7200)
         )
 
-        val result = useCase()
+        fakeWeatherRepository.snapshots[place.cacheKey()] = WeatherSnapshot(
+            current = null,
+            forecast = null,
+            alerts = Cached(AlertsResult(listOf(severeAlert), null), clock.instant())
+        )
 
-        assertEquals(RefreshResult.Done, result.outcome)
-        assertEquals(place.cacheKey(), result.placeKey)
+        // Run 1: First run with empty seen_alerts table -> records baseline without notifying
+        useCase()
+        coVerify(exactly = 0) { mockNotifier.postNotification(any(), any()) }
+
+        // Run 2: An alert with higher severity (EXTREME) for the same event arrives -> 1 notification posted
+        val extremeAlert = severeAlert.copy(id = "alert-extreme-2", severity = AlertSeverity.EXTREME)
+        fakeWeatherRepository.snapshots[place.cacheKey()] = WeatherSnapshot(
+            current = null,
+            forecast = null,
+            alerts = Cached(AlertsResult(listOf(extremeAlert), null), clock.instant())
+        )
+
+        useCase()
+        coVerify(exactly = 1) { mockNotifier.postNotification(place, extremeAlert) }
+
+        // Run 3: Same alert again -> no second notification
+        useCase()
+        coVerify(exactly = 1) { mockNotifier.postNotification(place, any()) }
     }
 }
 
@@ -171,11 +224,12 @@ class FakePlaceRepositoryForUseCase : PlaceRepository {
 }
 
 class FakeWeatherRepositoryForUseCase : WeatherRepository {
+    val snapshots = mutableMapOf<String, WeatherSnapshot>()
     var refreshOutcome = RefreshOutcome(Result.success(Unit), Result.success(Unit), Result.success(Unit))
     var refreshCallCount = 0
 
     override fun observe(place: Place): Flow<WeatherSnapshot> {
-        return MutableStateFlow(WeatherSnapshot(null, null, null))
+        return MutableStateFlow(snapshots[place.cacheKey()] ?: WeatherSnapshot(null, null, null))
     }
 
     override suspend fun refresh(place: Place): RefreshOutcome {
@@ -192,5 +246,45 @@ class FakeLocationDataStoreForUseCase : LocationDataStore(
 
     override suspend fun saveLastLocation(lat: Double, lon: Double, name: String) {
         state.value = LastKnownLocationFix(lat, lon, name)
+    }
+}
+
+class FakeNotificationDataStoreForUseCase : NotificationDataStore(
+    dataStore = mockk(relaxed = true)
+) {
+    val enabledState = MutableStateFlow(false)
+    override val alertNotificationsEnabled: Flow<Boolean> = enabledState
+
+    override suspend fun setAlertNotificationsEnabled(enabled: Boolean) {
+        enabledState.value = enabled
+    }
+}
+
+class FakeSeenAlertDao : SeenAlertDao {
+    private val entities = mutableListOf<SeenAlertEntity>()
+
+    override suspend fun getSeenAlertsForPlace(placeKey: String): List<SeenAlertEntity> {
+        return entities.filter { it.placeKey == placeKey }
+    }
+
+    override suspend fun getRecentAlertsForEvent(
+        placeKey: String,
+        eventKey: String,
+        sinceEpoch: Long
+    ): List<SeenAlertEntity> {
+        return entities.filter { it.placeKey == placeKey && it.eventKey == eventKey && it.firstSeenAt >= sinceEpoch }
+    }
+
+    override suspend fun upsert(entity: SeenAlertEntity) {
+        entities.removeAll { it.alertId == entity.alertId }
+        entities.add(entity)
+    }
+
+    override suspend fun upsertAll(entities: List<SeenAlertEntity>) {
+        entities.forEach { upsert(it) }
+    }
+
+    override suspend fun deleteExpired(olderThanEpoch: Long) {
+        entities.removeAll { it.expiresAt != null && it.expiresAt < olderThanEpoch }
     }
 }

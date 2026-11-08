@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.katharina.weather.data.local.LastKnownLocationFix
 import com.katharina.weather.data.local.LocationDataStore
+import com.katharina.weather.data.local.SeenAlertDao
+import com.katharina.weather.data.local.SeenAlertEntity
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.data.location.GeocoderHelper
 import com.katharina.weather.data.util.distanceBetweenInKm
@@ -20,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -36,7 +39,9 @@ class HomeViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val geocoderHelper: GeocoderHelper,
     private val locationDataStore: LocationDataStore,
-    private val weatherCacheDao: WeatherCacheDao
+    private val weatherCacheDao: WeatherCacheDao,
+    private val seenAlertDao: SeenAlertDao,
+    private val clock: Clock = Clock.systemUTC()
 ) : ViewModel() {
 
     private val tickerFlow: Flow<Instant> = flow {
@@ -168,6 +173,13 @@ class HomeViewModel @Inject constructor(
             val result = snapshot.alerts.value
             val visible = result.alerts.visibleAt(now)
             val isStale = Staleness.isAlertsStale(snapshot, now)
+
+            // Mark displayed alerts as seen in database (without notifying)
+            val allVisibleAlerts = visible.active + visible.upcoming
+            if (allVisibleAlerts.isNotEmpty()) {
+                markAlertsAsSeen(place.cacheKey(), allVisibleAlerts)
+            }
+
             AlertsUiState.Known(
                 visible = visible,
                 area = result.area,
@@ -210,6 +222,24 @@ class HomeViewModel @Inject constructor(
             isOfflineBanner = isOfflineBanner,
             userPullToRefreshError = userError
         )
+    }
+
+    private fun markAlertsAsSeen(placeKey: String, alerts: List<WeatherAlert>) {
+        viewModelScope.launch {
+            val nowEpoch = clock.millis()
+            val entities = alerts.map { alert ->
+                SeenAlertEntity(
+                    alertId = alert.id,
+                    placeKey = placeKey,
+                    eventKey = alert.eventCode?.toString() ?: alert.event,
+                    severity = alert.severity.name.lowercase(),
+                    firstSeenAt = nowEpoch,
+                    expiresAt = alert.expires?.toEpochMilli(),
+                    notified = false
+                )
+            }
+            seenAlertDao.upsertAll(entities)
+        }
     }
 
     fun onStart() {

@@ -3,16 +3,22 @@ package com.katharina.weather.ui.alerts
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.katharina.weather.data.local.LocationDataStore
+import com.katharina.weather.data.local.NotificationDataStore
+import com.katharina.weather.data.local.SeenAlertDao
+import com.katharina.weather.data.local.SeenAlertEntity
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.domain.model.*
+import com.katharina.weather.domain.notification.AlertNotifier
 import com.katharina.weather.domain.repository.PlaceRepository
 import com.katharina.weather.domain.repository.WeatherRepository
 import com.katharina.weather.ui.debug.insertTestAlert
+import com.katharina.weather.ui.debug.postTestNotification
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.time.Clock
 import java.time.Instant
 import javax.inject.Inject
 
@@ -22,7 +28,11 @@ class AlertsViewModel @Inject constructor(
     private val placeRepository: PlaceRepository,
     private val weatherRepository: WeatherRepository,
     private val locationDataStore: LocationDataStore,
-    private val weatherCacheDao: WeatherCacheDao
+    private val notificationDataStore: NotificationDataStore,
+    private val weatherCacheDao: WeatherCacheDao,
+    private val seenAlertDao: SeenAlertDao,
+    private val alertNotifier: AlertNotifier,
+    private val clock: Clock = Clock.systemUTC()
 ) : ViewModel() {
 
     private val tickerFlow: Flow<Instant> = flow {
@@ -87,8 +97,9 @@ class AlertsViewModel @Inject constructor(
     private fun observeAlerts(place: Place): Flow<AlertsUiState> {
         return combine(
             weatherRepository.observe(place),
-            tickerFlow.onStart { emit(Instant.now()) }
-        ) { snapshot, _ ->
+            tickerFlow.onStart { emit(Instant.now()) },
+            notificationDataStore.alertNotificationsEnabled
+        ) { snapshot, _, notificationsEnabled ->
             val now = Instant.now()
             if (snapshot.alerts == null) {
                 AlertsUiState.Unknown
@@ -96,13 +107,45 @@ class AlertsViewModel @Inject constructor(
                 val result = snapshot.alerts.value
                 val visible = result.alerts.visibleAt(now)
                 val isStale = Staleness.isAlertsStale(snapshot, now)
+
+                // Mark displayed alerts as seen in database (without notifying)
+                val allVisibleAlerts = visible.active + visible.upcoming
+                if (allVisibleAlerts.isNotEmpty()) {
+                    markAlertsAsSeen(place.cacheKey(), allVisibleAlerts)
+                }
+
                 AlertsUiState.Known(
                     visible = visible,
                     area = result.area,
                     checkedAt = snapshot.alerts.fetchedAt,
-                    isStale = isStale
+                    isStale = isStale,
+                    isNotificationsEnabled = notificationsEnabled
                 )
             }
+        }
+    }
+
+    private fun markAlertsAsSeen(placeKey: String, alerts: List<WeatherAlert>) {
+        viewModelScope.launch {
+            val nowEpoch = clock.millis()
+            val entities = alerts.map { alert ->
+                SeenAlertEntity(
+                    alertId = alert.id,
+                    placeKey = placeKey,
+                    eventKey = alert.eventCode?.toString() ?: alert.event,
+                    severity = alert.severity.name.lowercase(),
+                    firstSeenAt = nowEpoch,
+                    expiresAt = alert.expires?.toEpochMilli(),
+                    notified = false
+                )
+            }
+            seenAlertDao.upsertAll(entities)
+        }
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            notificationDataStore.setAlertNotificationsEnabled(enabled)
         }
     }
 
@@ -119,6 +162,13 @@ class AlertsViewModel @Inject constructor(
         val place = currentPlace ?: return
         viewModelScope.launch {
             insertTestAlert(place.cacheKey(), place.latitude, place.longitude, weatherCacheDao)
+        }
+    }
+
+    fun postTestNotificationForDebug() {
+        val place = currentPlace ?: return
+        viewModelScope.launch {
+            postTestNotification(place, alertNotifier, seenAlertDao)
         }
     }
 }

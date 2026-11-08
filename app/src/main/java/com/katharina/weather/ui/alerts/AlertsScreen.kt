@@ -1,5 +1,8 @@
 package com.katharina.weather.ui.alerts
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -12,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -31,9 +35,12 @@ import java.time.Instant
 fun AlertsScreen(
     state: AlertsUiState,
     isRefreshing: Boolean,
+    hasNotificationPermission: Boolean,
     onRefresh: () -> Unit,
+    onToggleNotifications: (Boolean) -> Unit,
     onBack: () -> Unit,
     onInsertTestAlert: () -> Unit,
+    onPostTestNotification: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -50,11 +57,33 @@ fun AlertsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onInsertTestAlert) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_info),
-                            contentDescription = "Insert test alert"
-                        )
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_info),
+                                contentDescription = "Debug options"
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Insert test alert (Cache)") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onInsertTestAlert()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Post test notification (OS)") },
+                                onClick = {
+                                    menuExpanded = false
+                                    onPostTestNotification()
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -76,7 +105,11 @@ fun AlertsScreen(
                     )
                 }
                 is AlertsUiState.Known -> {
-                    AlertsKnownContent(state = state)
+                    AlertsKnownContent(
+                        state = state,
+                        hasNotificationPermission = hasNotificationPermission,
+                        onToggleNotifications = onToggleNotifications
+                    )
                 }
             }
         }
@@ -104,9 +137,12 @@ fun AlertsErrorContent(
 @Composable
 fun AlertsKnownContent(
     state: AlertsUiState.Known,
+    hasNotificationPermission: Boolean,
+    onToggleNotifications: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val now = Instant.now()
+    val context = LocalContext.current
     val checkedStr = formatRelativeTime(state.checkedAt, now)
     val areaStr = listOfNotNull(state.area?.name, state.area?.district).joinToString(", ")
 
@@ -201,9 +237,57 @@ fun AlertsKnownContent(
             }
         }
 
+        // Notification Switch Card (Positioned below the warnings list)
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Notify me about severe warnings",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = state.isNotificationsEnabled && hasNotificationPermission,
+                            onCheckedChange = { checked -> onToggleNotifications(checked) }
+                        )
+                    }
+
+                    if (state.isNotificationsEnabled && !hasNotificationPermission) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Notification permission is required to receive warning alerts. Please enable notifications in system settings.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Text(text = "Open settings")
+                        }
+                    }
+                }
+            }
+        }
+
         // Attribution
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Source: Deutscher Wetterdienst",
                 style = MaterialTheme.typography.labelSmall,
@@ -350,12 +434,16 @@ fun AlertsScreenNonePreview() {
                 visible = VisibleAlerts(active = emptyList(), upcoming = emptyList()),
                 area = AlertArea("München-Altstadt-Lehel", "München", "Bayern"),
                 checkedAt = Instant.now(),
-                isStale = false
+                isStale = false,
+                isNotificationsEnabled = false
             ),
             isRefreshing = false,
+            hasNotificationPermission = true,
             onRefresh = {},
+            onToggleNotifications = {},
             onBack = {},
-            onInsertTestAlert = {}
+            onInsertTestAlert = {},
+            onPostTestNotification = {}
         )
     }
 }
@@ -385,12 +473,16 @@ fun AlertsScreenOneMinorPreview() {
                 ),
                 area = AlertArea("Frankfurt-Nord", "Frankfurt am Main", "Hessen"),
                 checkedAt = Instant.now(),
-                isStale = false
+                isStale = false,
+                isNotificationsEnabled = true
             ),
             isRefreshing = false,
+            hasNotificationPermission = true,
             onRefresh = {},
+            onToggleNotifications = {},
             onBack = {},
-            onInsertTestAlert = {}
+            onInsertTestAlert = {},
+            onPostTestNotification = {}
         )
     }
 }
@@ -411,12 +503,16 @@ fun AlertsScreenSevereAndMorePreview() {
                 ),
                 area = AlertArea("Frankfurt-Nord", "Frankfurt am Main", "Hessen"),
                 checkedAt = Instant.now(),
-                isStale = false
+                isStale = false,
+                isNotificationsEnabled = true
             ),
             isRefreshing = false,
+            hasNotificationPermission = true,
             onRefresh = {},
+            onToggleNotifications = {},
             onBack = {},
-            onInsertTestAlert = {}
+            onInsertTestAlert = {},
+            onPostTestNotification = {}
         )
     }
 }
@@ -435,12 +531,16 @@ fun AlertsScreenUpcomingOnlyPreview() {
                 ),
                 area = AlertArea("Frankfurt-Nord", "Frankfurt am Main", "Hessen"),
                 checkedAt = Instant.now(),
-                isStale = false
+                isStale = false,
+                isNotificationsEnabled = false
             ),
             isRefreshing = false,
+            hasNotificationPermission = true,
             onRefresh = {},
+            onToggleNotifications = {},
             onBack = {},
-            onInsertTestAlert = {}
+            onInsertTestAlert = {},
+            onPostTestNotification = {}
         )
     }
 }
@@ -459,12 +559,16 @@ fun AlertsScreenStalePreview() {
                 ),
                 area = AlertArea("Frankfurt-Nord", "Frankfurt am Main", "Hessen"),
                 checkedAt = Instant.now().minusSeconds(7200),
-                isStale = true
+                isStale = true,
+                isNotificationsEnabled = false
             ),
             isRefreshing = false,
+            hasNotificationPermission = true,
             onRefresh = {},
+            onToggleNotifications = {},
             onBack = {},
-            onInsertTestAlert = {}
+            onInsertTestAlert = {},
+            onPostTestNotification = {}
         )
     }
 }
@@ -476,9 +580,12 @@ fun AlertsScreenUnknownPreview() {
         AlertsScreen(
             state = AlertsUiState.Unknown,
             isRefreshing = false,
+            hasNotificationPermission = true,
             onRefresh = {},
+            onToggleNotifications = {},
             onBack = {},
-            onInsertTestAlert = {}
+            onInsertTestAlert = {},
+            onPostTestNotification = {}
         )
     }
 }

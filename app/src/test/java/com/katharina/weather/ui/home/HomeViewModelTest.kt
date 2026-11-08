@@ -2,6 +2,7 @@ package com.katharina.weather.ui.home
 
 import app.cash.turbine.test
 import com.katharina.weather.data.local.LocationDataStore
+import com.katharina.weather.data.local.SeenAlertDao
 import com.katharina.weather.data.local.WeatherCacheDao
 import com.katharina.weather.data.location.GeocoderHelper
 import com.katharina.weather.domain.model.*
@@ -20,7 +21,9 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.io.IOException
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -32,6 +35,8 @@ class HomeViewModelTest {
         coEvery { lastLocation } returns MutableStateFlow(null)
     }
     private val fakeWeatherCacheDao: WeatherCacheDao = mockk(relaxed = true)
+    private val fakeSeenAlertDao: SeenAlertDao = mockk(relaxed = true)
+    private val clock = Clock.fixed(Instant.parse("2026-10-30T14:00:00Z"), ZoneId.of("UTC"))
     private val geocoderHelper: GeocoderHelper = mockk {
         coEvery { getPlaceName(any()) } returns "Current location"
     }
@@ -54,7 +59,9 @@ class HomeViewModelTest {
             fakeLocationProvider,
             geocoderHelper,
             fakeLocationDataStore,
-            fakeWeatherCacheDao
+            fakeWeatherCacheDao,
+            fakeSeenAlertDao,
+            clock
         )
 
         viewModel.uiState.test {
@@ -84,7 +91,9 @@ class HomeViewModelTest {
             fakeLocationProvider,
             geocoderHelper,
             fakeLocationDataStore,
-            fakeWeatherCacheDao
+            fakeWeatherCacheDao,
+            fakeSeenAlertDao,
+            clock
         )
 
         viewModel.uiState.test {
@@ -122,7 +131,9 @@ class HomeViewModelTest {
             fakeLocationProvider,
             geocoderHelper,
             fakeLocationDataStore,
-            fakeWeatherCacheDao
+            fakeWeatherCacheDao,
+            fakeSeenAlertDao,
+            clock
         )
 
         viewModel.uiState.test {
@@ -158,11 +169,13 @@ class HomeViewModelTest {
             fakeLocationProvider,
             geocoderHelper,
             fakeLocationDataStore,
-            fakeWeatherCacheDao
+            fakeWeatherCacheDao,
+            fakeSeenAlertDao,
+            clock
         )
 
         viewModel.uiState.test {
-            awaitItem() // Initial Loading
+            awaitItem() // 1: Initial Loading
             testScheduler.runCurrent()
             viewModel.refresh(userInitiated = false)
             testScheduler.runCurrent()

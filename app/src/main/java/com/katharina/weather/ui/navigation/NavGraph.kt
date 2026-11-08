@@ -1,6 +1,7 @@
 package com.katharina.weather.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -23,8 +24,15 @@ object AlertsDestination
 @Composable
 fun WeatherNavGraph(
     modifier: Modifier = Modifier,
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    navigateToAlerts: Boolean = false
 ) {
+    LaunchedEffect(navigateToAlerts) {
+        if (navigateToAlerts) {
+            navController.navigate(AlertsDestination)
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = HomeDestination,
@@ -43,14 +51,22 @@ fun WeatherNavGraph(
         composable<PlacesDestination> {
             PlacesRoute(
                 onBack = {
-                    navController.popBackStack()
+                    if (!navController.popBackStack()) {
+                        navController.navigate(HomeDestination) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
                 }
             )
         }
         composable<AlertsDestination> {
             AlertsRoute(
                 onBack = {
-                    navController.popBackStack()
+                    if (!navController.popBackStack()) {
+                        navController.navigate(HomeDestination) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    }
                 }
             )
         }

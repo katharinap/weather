@@ -9,6 +9,7 @@ sealed interface AlertsUiState {
         val visible: VisibleAlerts,
         val area: AlertArea?,
         val checkedAt: Instant,
-        val isStale: Boolean
+        val isStale: Boolean,
+        val isNotificationsEnabled: Boolean = false
     ) : AlertsUiState
 }
