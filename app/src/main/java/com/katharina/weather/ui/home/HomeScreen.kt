@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -49,7 +50,6 @@ import com.katharina.weather.ui.home.chart.HourlyChart
 import com.katharina.weather.ui.theme.WeatherTheme
 import com.katharina.weather.ui.util.getStyle
 import com.katharina.weather.ui.util.toWindDirectionStringRes
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -304,7 +304,8 @@ fun SuccessContent(
             Image(
                 painter = painterResource(id = getWeatherIconRes(weather.icon)),
                 contentDescription = null,
-                modifier = Modifier.size(96.dp)
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(108.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
@@ -629,7 +630,7 @@ fun HourlyItem(item: HourlyForecast, isFirst: Boolean) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.width(64.dp)
+        modifier = Modifier.width(68.dp)
     ) {
         Text(
             text = timeLabel,
@@ -639,7 +640,8 @@ fun HourlyItem(item: HourlyForecast, isFirst: Boolean) {
         Image(
             painter = painterResource(id = getWeatherIconRes(item.icon)),
             contentDescription = null,
-            modifier = Modifier.size(28.dp)
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.size(46.dp)
         )
         Text(
             text = item.temperature?.let { stringResource(R.string.format_temperature, it.toInt()) } ?: "–",
@@ -696,23 +698,23 @@ fun DailyRow(day: DailyForecast) {
             text = dayLabel,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.width(80.dp)
+            modifier = Modifier.width(76.dp)
         )
 
-        Row(
-            modifier = Modifier.width(32.dp),
-            horizontalArrangement = Arrangement.Start,
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.width(44.dp),
+            contentAlignment = Alignment.Center
         ) {
             Image(
                 painter = painterResource(id = getWeatherIconRes(day.condition.toDayVariant().name)),
                 contentDescription = null,
-                modifier = Modifier.size(24.dp)
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(42.dp)
             )
         }
 
         Box(
-            modifier = Modifier.width(90.dp),
+            modifier = Modifier.width(84.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             val prob = day.maxPrecipProbabilityPercent
